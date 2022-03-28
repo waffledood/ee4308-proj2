@@ -80,6 +80,11 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // Qz, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
     double Q_z = qz;
 
+    // yaw //
+    // F_a, W_a, Jacobian matrices of yaw
+    cv::Matx21d W_a = {imu_dt, 1};
+    double Q_a = qa;
+
     // predicting next state P_x
     P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
 
@@ -90,6 +95,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
 
     // predicting next state P_a
+    P_a = F_x * P_a * F_x.t() + W_a * Q_z * W_a.t();
 }
 
 // --------- GPS ----------
