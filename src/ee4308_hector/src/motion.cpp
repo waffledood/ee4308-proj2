@@ -54,6 +54,42 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     uz = msg->linear_acceleration.z;
     
     //// IMPLEMENT IMU ////
+
+    //// additional variables ////
+    // yaw
+    double a = A(0);
+
+    // x // 
+    // F_x, W_x, Jacobian matrices of x_axis
+    cv::Matx22d F_x = {1, imu_dt, 0, 1};
+    cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a), 0.5 * pow(imu_dt, 2) * sin(a),
+                       -imu_dt * cos(a), imu_dt * sin(a)};
+    // Qx, diagonal covariance matrix of the IMU noise in the IMU frame along the x-axis
+    cv::Matx22d Q_x = {qx, 0, 0, qy};
+
+    // y // 
+    // F_y, W_y, Jacobian matrices of y_axis
+    cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a), -0.5 * pow(imu_dt, 2) * sin(a),
+                       -imu_dt * cos(a), -imu_dt * sin(a)};
+    // Qy, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
+    cv::Matx22d Q_y = {qy, 0, 0, qx};
+
+    // z //
+    // F_z, W_z, Jacobian matrices of z_axis
+    cv::Matx21d W_z = {0.5 * pow(imu_dt, 2), imu_dt};
+    // Qz, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
+    double Q_z = qz;
+
+    // predicting next state P_x
+    P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
+
+    // predicting next state P_y
+    P_y = F_x * P_y * F_x.t() + W_y * Q_y * W_y.t();
+
+    // predicting next state P_z
+    P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
+
+    // predicting next state P_a
 }
 
 // --------- GPS ----------
