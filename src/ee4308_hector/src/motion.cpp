@@ -13,6 +13,9 @@
 #include <std_srvs/Empty.h>                          // Service to calrbrate motors
 #include <opencv2/core/core.hpp>
 #include "common.hpp"
+#include <iostream>
+#include <vector>
+using namespace std;
 
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
@@ -141,27 +144,36 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 // --------- Baro ----------
 double z_bar = NaN;
 double r_bar_z;
+vector<double> baro;
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
     if (!ready)
         return;
 
     //// IMPLEMENT BARO ////
-    // z_bar = msg->altitude;
+    z_bar = msg->altitude;
+    baro.push_back(z_bar);
+    if (baro.size() > 100) {
+        r_bar_z = calculate_var(baro);
+    }
 
 }
 
 // --------- Sonar ----------
 double z_snr = NaN;
 double r_snr_z;
+vector<double> sonar;
 void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 {
     if (!ready)
         return;
 
     //// IMPLEMENT SONAR ////
-    // z_snr = msg->range;
-
+    z_snr = msg->range;
+    sonar.push_back(z_snr);
+    if (sonar.size() > 100) {
+        r_snr_z = calculate_var(sonar);
+    }
 }
 
 // --------- GROUND TRUTH ----------
