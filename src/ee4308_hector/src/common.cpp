@@ -79,3 +79,27 @@ double limit_angle(double angle)
     double result = fmod(angle + M_PI, M_PI*2); // fmod rounds remainders to zero. we want remainders to be +ve like mod() in matlab and % in python
     return result >= 0 ? result - M_PI : result + M_PI;
 }
+double calculate_mean(int arr[])
+{
+    double sum = 0;
+    int size = sizeof(arr) / sizeof(arr[0]);
+
+    for (int i = 0; i < size; i++) {
+        sum += arr[i];
+    }
+
+    return sum / size;
+}
+double calculate_var(int arr[])
+{
+    float var = 0, mean;
+    int size = sizeof(arr) / sizeof(arr[0]);
+
+    mean = calculate_mean(arr);
+
+    for (int i = 0; i < size; i++) {
+        var += (arr[i] - mean) * (arr[i] - mean);
+    }
+
+    return var;
+}
