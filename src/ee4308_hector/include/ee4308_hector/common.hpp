@@ -23,7 +23,7 @@ double dist_euc(double src_x, double src_y, double tgt_x, double tgt_y);
 double heading(Position src, Position tgt); // overload
 double heading(double src_x, double src_y, double tgt_x, double tgt_y);
 double limit_angle(double angle);
-double calculate_sum(int arr[]);
-double calculate_var(int arr[]);
+double calculate_mean(double arr[]);
+double calculate_var(double arr[]);
 
 #endif
