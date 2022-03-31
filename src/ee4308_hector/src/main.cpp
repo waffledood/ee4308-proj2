@@ -159,32 +159,112 @@ int main(int argc, char **argv)
         // get topics
         ros::spinOnce();
 
-        //// IMPLEMENT ////
-        // if (state == TAKEOFF)
-        // {
-            // // Disable Rotate
-            // msg_rotate.data = false;
-            // pub_rotate.publish(msg_rotate)
-        // }
-        // else if (state == TURTLE)
-        // {
-            
-        // }
-        // else if (state == START)
-        // {
-            // if (!nh.param("/turtle/run", false))
-            // { // when the turtle reaches the final goal
-                // state = LAND;
-            // }
-        // }
-        // else if (state == GOAL)
-        // {
-            
-        // }
-        // else if (state == LAND)
-        // {
-            
-        // }
+        geometry_msgs::PoseStamped hector_pose;
+        hector_pose.pose.position.x = x;
+        hector_pose.pose.position.y = y;
+        hector_pose.pose.position.z = z;
+        hector_pose.pose.orientation.w = 1.0;
+
+        geometry_msgs::PoseStamped goal;
+        goal.pose.orientation.w = 1.0; // use identity quaternion since orientation is not relevant
+
+        if (state == TAKEOFF) 
+        {
+            // Disable Rotate
+            msg_rotate.data = false;
+            pub_rotate.publish(msg_rotate);
+        }
+        else
+        {
+            // Enable Rotate
+            msg_rotate.data = true;
+            pub_rotate.publish(msg_rotate);
+        }
+
+        if (state == TAKEOFF)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+            goal.pose.position.z = height;
+
+            if (std::abs(z - height) < close_enough)
+            {
+                state = TURTLE;
+            }
+        }
+        else if (state == TURTLE)
+        {
+            goal.pose.position.x = turtle_x;
+            goal.pose.position.y = turtle_y;
+            goal.pose.position.z = height;
+
+            if (dist_euc(x, y, turtle_x, turtle_y) < close_enough)
+            {
+                state = GOAL;
+            }
+        }
+        else if (state == START)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+            goal.pose.position.z = height;
+
+            if (!nh.param("/turtle/run", false))
+            { // when the turtle reaches the final goal
+                state = LAND;
+            }
+            else if (dist_euc(x,y,initial_x,initial_y) < close_enough)
+            {
+                state = TURTLE;
+            }
+        }
+        else if (state == GOAL)
+        {
+            goal.pose.position.x = goal_x;
+            goal.pose.position.y = goal_y;
+            goal.pose.position.z = height;
+
+            if (dist_euc(x, y, goal_x, goal_y) < close_enough)
+            {
+                state = START;
+            }
+        }
+        else if (state == LAND)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+            goal.pose.position.z = 0.0;
+        }
+
+        // x, y, z component of distance to goal
+        double dx = goal.pose.position.x - x;
+        double dy = goal.pose.position.y - y;
+        double dz = goal.pose.position.z - z;
+
+        // distance to goal
+        double dist = sqrt(dx * dx + dy * dy + dz * dz);
+
+        // normalize x, y, z components
+        double unit_x = dx / dist;
+        double unit_y = dy / dist;
+        double unit_z = dz / dist;
+
+        // linear velocity of hector
+        double lin_vel = sqrt(vx * vx + vy * vy + vz * vz);
+
+        // look ahead distance
+        double look_ahead_distance = lin_vel * look_ahead;
+
+        // prevent look ahead point from exceeding the goal
+        look_ahead_distance = std::min(look_ahead_distance, dist);
+
+        msg_target.point.x = x + unit_x * look_ahead_distance;
+        msg_target.point.y = y + unit_y * look_ahead_distance;
+        msg_target.point.z = z + unit_z * look_ahead_distance;
+
+        msg_traj.poses = {hector_pose, goal};
+        pub_target.publish(msg_target);
+        pub_traj.publish(msg_traj);
 
         if (verbose)
             ROS_INFO_STREAM(" HMAIN : " << to_string(state));
