@@ -130,6 +130,18 @@ int main(int argc, char **argv)
     double dt;
     double prev_time = ros::Time::now().toSec();
 
+    double x_pos_error, y_pos_error, z_pos_error;
+    double past_x_pos_error = 0, past_y_pos_error = 0, past_z_pos_error = 0;
+    double total_x = 0, total_y = 0, total_z = 0;
+    double x_portional, x_integal, x_derviate;
+    double y_portional, y_integal, y_derviate;
+    double z_portional, z_integal, z_derviate;
+    
+    double pos_error, total_error = 0;
+    double total_portional, total_integal, total_derviate;
+    double past_pos_error = 0;
+    double cmd_total_lin_vel;
+
     // main loop
     while (ros::ok() && nh.param("run", true))
     {
@@ -149,7 +161,64 @@ int main(int argc, char **argv)
         pub_cmd.publish(msg_cmd);
 
         //// IMPLEMENT /////
+
+        pos_error = dist_euc(x, y, target_x, target_y);
+
+        x_pos_error = target_x - x;
+        y_pos_error = target_y - y;
+        z_pos_error = target_z - z;
         
+        total_error += pos_error;
+
+        total_x += x_pos_error;
+        total_y += y_pos_error;
+        total_z += z_pos_error;
+
+        total_portional = Kp_lin * pos_error;
+        total_integal = Ki_lin * total_error;
+        total_derviate = Kd_lin * ((pos_error - past_pos_error)/dt);
+
+        x_portional = Kp_lin * x_pos_error;
+        x_integal = Ki_lin * total_x;
+        x_derviate = Kd_lin * ((x_pos_error - past_x_pos_error)/dt);
+
+        y_portional = Kp_lin * y_pos_error;
+        y_integal = Ki_lin * total_y;
+        y_derviate = Kd_lin * ((y_pos_error - past_y_pos_error)/dt);
+
+        z_portional = Kp_z * z_pos_error;
+        z_integal = Ki_z * total_z;
+        z_derviate = Kd_z * ((z_pos_error - past_z_pos_error)/dt);
+
+        past_x_pos_error = x_pos_error;
+        past_y_pos_error = y_pos_error;
+        past_z_pos_error = z_pos_error;
+        past_pos_error = pos_error;
+        
+        cmd_lin_vel_x = x_portional + x_integal + x_derviate;
+        cmd_lin_vel_y = y_portional + y_integal + y_derviate;
+        cmd_lin_vel_z = z_portional + z_integal + z_derviate;
+        if (sub_rotate) {
+            cmd_lin_vel_a = yaw_rate;
+        } 
+        cmd_total_lin_vel = total_derviate + total_integal + total_portional;
+
+        if (cmd_total_lin_vel > max_lin_vel) {
+            cmd_lin_vel_x *= max_lin_vel/cmd_total_lin_vel;
+            cmd_lin_vel_y *= max_lin_vel/cmd_total_lin_vel;
+            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);    
+        } else if (cmd_total_lin_vel < - max_lin_vel) {
+            cmd_lin_vel_x *= -max_lin_vel/cmd_total_lin_vel;
+            cmd_lin_vel_y *= -max_lin_vel/cmd_total_lin_vel;
+            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);  
+        } else {
+            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);      
+        }
+
+        //cmd_lin_vel_x = sat(cmd_lin_vel_x, max_lin_vel);
+        //cmd_lin_vel_y = sat(cmd_lin_vel_y, max_lin_vel);
+        //cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);
+
         // verbose
         if (verbose)
         {
