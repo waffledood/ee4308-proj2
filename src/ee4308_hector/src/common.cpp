@@ -103,5 +103,5 @@ double calculate_var(std::vector<double>& vec)
         var += (vec.at(i) - mean) * (vec.at(i) - mean);
     }
 
-    return var;
+    return var / (size - 1);
 }

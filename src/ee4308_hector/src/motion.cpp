@@ -109,36 +109,63 @@ const double DEG2RAD = M_PI / 180;
 const double RAD_POLAR = 6356752.3;
 const double RAD_EQUATOR = 6378137;
 double r_gps_x, r_gps_y, r_gps_z;
+double eSqr, pvrc; // e^2 and N(φ)
+cv::Matx31d initial_ECEF = {NaN, NaN, NaN};
+cv::Matx31d ECEF = {NaN, NaN, NaN};
+cv::Matx31d NED = {NaN, NaN, NaN};
 void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 {
     if (!ready)
         return;
 
     //// IMPLEMENT GPS /////
-    // double lat = msg->latitude;
-    // double lon = msg->longitude;
-    // double alt = msg->altitude;
-    
-    // // for initial message -- you may need this:
-    // if (std::isnan(initial_ECEF(0)))
-    // {   // calculates initial ECEF and returns
-    //     initial_ECEF = ECEF;
-    //     return;
-    // }
-    
+    double lat = msg->latitude;
+    double lon = msg->longitude;
+    double alt = msg->altitude;
+
+    lat *= DEG2RAD;
+    lon *= DEG2RAD;
+
+    eSqr = 1 - pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2);
+    pvrc = RAD_EQUATOR / sqrt(1 - eSqr * pow(sin(lat), 2));
+
+    ECEF = {(pvrc + alt) * cos(lat) * cos(lon), (pvrc + alt) * cos(lat) * sin(lon), 
+        pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2) * (pvrc + alt) * cos(lat) * sin(lat)};
+
+    // for initial message -- you may need this:
+    if (std::isnan(initial_ECEF(0)))
+    {   // calculates initial ECEF and returns
+        initial_ECEF = ECEF;
+        return;
+    }
+
+    ECEF = {(ECEF(0) - initial_ECEF(0)), (ECEF(1) - initial_ECEF(1)), (ECEF(2) - initial_ECEF(2))};
+    NED = {-sin(lat) * cos(lon) * ECEF(0) + -sin(lon) * ECEF(1) + -cos(lat) * cos(lon) * ECEF(2),
+        -sin(lat) * sin(lon) * ECEF(0) + -cos(lon) * ECEF(1) + -cos(lat) * sin(lon) * ECEF(2),
+        cos(lat) * ECEF(0) +  -sin(lon) * ECEF(2)};
+
+    GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
 }
 
 // --------- Magnetic ----------
 double a_mgn = NaN;
 double r_mgn_a;
+vector<double> magnetic;
 void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 {
     if (!ready)
         return;
     
-    //// IMPLEMENT GPS ////
-    // double mx = msg->vector.x;
-    // double my = msg->vector.y;
+    // IMPLEMENT Magnetic ////
+    double mx = msg->vector.x;
+    double my = msg->vector.y;
+    a_mgn = atan2(-my, mx);
+    magnetic.push_back(a_mgn);
+    if (magnetic.size() > 100) {
+        // r_mgn_a = calculate_var(magnetic);
+        ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+        magnetic.erase(magnetic.begin());
+    }
 }
 
 // --------- Baro ----------
@@ -154,7 +181,9 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
     baro.push_back(z_bar);
     if (baro.size() > 100) {
-        r_bar_z = calculate_var(baro);
+        // r_bar_z = calculate_var(baro);
+        ROS_INFO("Baro Variance: %7.3lf", calculate_var(baro));
+        baro.erase(baro.begin());
     }
 
 }
@@ -175,7 +204,9 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     z_snr = msg->range;
     sonar.push_back(z_snr);
     if (sonar.size() > 100) {
-        r_snr_z = calculate_var(sonar);
+        // r_snr_z = calculate_var(sonar);
+        ROS_INFO("Sonar Variance: %7.3lf", calculate_var(sonar));
+        sonar.erase(sonar.begin());
     }
 }
 
