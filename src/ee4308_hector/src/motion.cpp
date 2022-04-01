@@ -160,6 +160,9 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 }
 
 // --------- Sonar ----------
+/* important note: sonar has a range of 3m & is affected 
+   by heights of ground obstacles 
+*/
 double z_snr = NaN;
 double r_snr_z;
 vector<double> sonar;
