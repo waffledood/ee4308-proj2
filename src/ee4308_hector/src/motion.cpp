@@ -162,7 +162,9 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     a_mgn = atan2(-my, mx);
     magnetic.push_back(a_mgn);
     if (magnetic.size() > 100) {
-        r_mgn_a = calculate_var(magnetic);
+        // r_mgn_a = calculate_var(magnetic);
+        ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+        magnetic.erase(magnetic.begin());
     }
 }
 
@@ -179,7 +181,9 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
     baro.push_back(z_bar);
     if (baro.size() > 100) {
-        r_bar_z = calculate_var(baro);
+        // r_bar_z = calculate_var(baro);
+        ROS_INFO("Baro Variance: %7.3lf", calculate_var(baro));
+        baro.erase(baro.begin());
     }
 
 }
@@ -197,7 +201,9 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     z_snr = msg->range;
     sonar.push_back(z_snr);
     if (sonar.size() > 100) {
-        r_snr_z = calculate_var(sonar);
+        // r_snr_z = calculate_var(sonar);
+        ROS_INFO("Sonar Variance: %7.3lf", calculate_var(sonar));
+        sonar.erase(sonar.begin());
     }
 }
 
