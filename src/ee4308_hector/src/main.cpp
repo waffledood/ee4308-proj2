@@ -173,12 +173,14 @@ int main(int argc, char **argv)
             // Disable Rotate
             msg_rotate.data = false;
             pub_rotate.publish(msg_rotate);
+            ROS_INFO ("MAIN TAKEOFF");
         }
         else
         {
             // Enable Rotate
             msg_rotate.data = true;
             pub_rotate.publish(msg_rotate);
+            ROS_INFO("MAIN TAKEOFF IS DONE!");
         }
 
         if (state == TAKEOFF)

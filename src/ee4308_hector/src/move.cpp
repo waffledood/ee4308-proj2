@@ -164,15 +164,15 @@ int main(int argc, char **argv)
 
         pos_error = dist_euc(x, y, target_x, target_y);
 
+        // Find position error between target and current coordinates
         x_pos_error = target_x - x;
         y_pos_error = target_y - y;
         z_pos_error = target_z - z;
         
-        total_error += pos_error;
-
         total_x += x_pos_error;
         total_y += y_pos_error;
         total_z += z_pos_error;
+        total_error += pos_error;
 
         total_portional = Kp_lin * pos_error;
         total_integal = Ki_lin * total_error;
@@ -198,31 +198,34 @@ int main(int argc, char **argv)
         cmd_lin_vel_x = x_portional + x_integal + x_derviate;
         cmd_lin_vel_y = y_portional + y_integal + y_derviate;
         cmd_lin_vel_z = z_portional + z_integal + z_derviate;
-        if (sub_rotate) {
-            cmd_lin_vel_a = yaw_rate;
-        } 
         cmd_total_lin_vel = total_derviate + total_integal + total_portional;
 
-        if (cmd_total_lin_vel > max_lin_vel) {
-            cmd_lin_vel_x *= max_lin_vel/cmd_total_lin_vel;
-            cmd_lin_vel_y *= max_lin_vel/cmd_total_lin_vel;
-            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);    
-        } else if (cmd_total_lin_vel < - max_lin_vel) {
-            cmd_lin_vel_x *= -max_lin_vel/cmd_total_lin_vel;
-            cmd_lin_vel_y *= -max_lin_vel/cmd_total_lin_vel;
-            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);  
+        // State Conditional Check 
+        if (rotate) {                              
+            cmd_lin_vel_a = yaw_rate;
+            if (cmd_total_lin_vel > max_lin_vel) {
+                cmd_lin_vel_x *= max_lin_vel/cmd_total_lin_vel;
+                cmd_lin_vel_y *= max_lin_vel/cmd_total_lin_vel;
+                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);    
+            } else if (cmd_total_lin_vel < - max_lin_vel) {
+                cmd_lin_vel_x *= -max_lin_vel/cmd_total_lin_vel;
+                cmd_lin_vel_y *= -max_lin_vel/cmd_total_lin_vel;
+                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);  
+            } else {
+                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);      
+            }
         } else {
-            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);      
-        }
-
-        //cmd_lin_vel_x = sat(cmd_lin_vel_x, max_lin_vel);
-        //cmd_lin_vel_y = sat(cmd_lin_vel_y, max_lin_vel);
-        //cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);
+            ROS_INFO("TAKEOFF MODE");
+            cmd_lin_vel_x = 0;
+            cmd_lin_vel_y = 0;
+            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel); 
+            cmd_lin_vel_a = 0;
+        } 
 
         // verbose
         if (verbose)
         {
-            // ROS_INFO(" HMOVE : Target(%6.3f, %6.3f, %6.3f) FV(%6.3f) VX(%6.3f) VY(%6.3f) VZ(%7.3f)", target_x, target_y, target_z, cmd_lin_vel, cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z);
+            ROS_INFO(" HMOVE : Target(%6.3f, %6.3f, %6.3f) VX(%6.3f) VY(%6.3f) VZ(%7.3f)", target_x, target_y, target_z, cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z);
         }
 
         // wait for rate
