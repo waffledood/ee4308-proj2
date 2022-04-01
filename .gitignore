@@ -1,3 +1,5 @@
 *.o
 build
 devel
+*.txt
+.catkin_workspace
