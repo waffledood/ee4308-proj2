@@ -14,15 +14,15 @@ qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 1
-r_gps_y: 1
-r_gps_z: 1
+r_gps_x: 25
+r_gps_y: 25
+r_gps_z: 25
 enable_magnet: true
-r_mgn_a: 0.000
+r_mgn_a: 0.000 // range from 0.000-0.001 for now, 0.000 most common
 enable_baro: true
-r_bar_z: 0.021
+r_bar_z: 0.021 // range from 0.015-0.024 for now
 enable_sonar: true
-r_snr_z: 0.000
+r_snr_z: 0.000 // range from 0.000-0.000 for now, 0.001 most common
 motion_iter_rate: 20
 
 # move
