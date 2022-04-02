@@ -254,6 +254,9 @@ int main(int argc, char **argv)
         // linear velocity of hector
         double lin_vel = sqrt(vx * vx + vy * vy + vz * vz);
 
+        // prevent look ahead distance from being too small
+        lin_vel = std::max(lin_vel, 0.1); 
+
         // look ahead distance
         double look_ahead_distance = lin_vel * look_ahead;
 
