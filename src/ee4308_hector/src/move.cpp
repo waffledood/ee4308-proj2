@@ -165,15 +165,15 @@ int main(int argc, char **argv)
         //// IMPLEMENT /////
 
         // Frame Transformation (from absolute to drone frame)
-        c_theta = cos(a);
-        s_theta = sin(a);
+        c_theta = cos(-a);
+        s_theta = sin(-a);
 
         // Find position error between target and current coordinates
-        x_pos_error = (target_x - x) * c_theta;
-        y_pos_error = (target_y - y) * s_theta;
+        x_pos_error = c_theta * (target_x - x) - s_theta * (target_y - y);
+        y_pos_error = s_theta * (target_x - x) + c_theta * (target_y - y);
         z_pos_error = target_z - z;
         pos_error = dist_euc(x, y, target_x, target_y);
-        
+
         // Sumation of position errors
         total_x += x_pos_error;
         total_y += y_pos_error;
