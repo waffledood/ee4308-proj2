@@ -180,6 +180,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 double z_bar = NaN;
 double r_bar_z;
 vector<double> baro;
+double baroBias;
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
     if (!ready)
@@ -189,7 +190,17 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
 
     // covariance
+    // // redefine Z as a 3x1 matrix
+    // Z = {Z(0), Z(1), 0};
+    // // collect all z_bar measurements
     // baro.push_back(z_bar);
+    // // determine z_bar bias by calculating average of all measurements
+    // baroBias = calculate_mean(baro);
+    // // assignment of bias to Z matrix
+    // Z(2) = baroBias;
+    // // assignment of corrected z_bar measurement
+    // z_bar = z_bar - baroBias;
+
     // if (baro.size() > 100) {
     //     ROS_INFO("Baro Variance: %7.3lf", calculate_var(baro));
     //     baro.erase(baro.begin());
