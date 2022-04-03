@@ -15,6 +15,7 @@
 #include "common.hpp"
 #include <iostream>
 #include <vector>
+#include <fstream>
 using namespace std;
 
 #define NaN std::numeric_limits<double>::quiet_NaN()
@@ -179,8 +180,10 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 // --------- Baro ----------
 double z_bar = NaN;
 double r_bar_z;
-vector<double> baro;
+vector<double> baroRawValues;
+vector<double> baroCorrectedValues;
 double baroBias;
+
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
     if (!ready)
@@ -190,21 +193,22 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
 
     // covariance
-    // // redefine Z as a 3x1 matrix
-    // Z = {Z(0), Z(1), 0};
-    // // collect all z_bar measurements
-    // baro.push_back(z_bar);
-    // // determine z_bar bias by calculating average of all measurements
-    // baroBias = calculate_mean(baro);
-    // // assignment of bias to Z matrix
-    // Z(2) = baroBias;
-    // // assignment of corrected z_bar measurement
-    // z_bar = z_bar - baroBias;
+    // redefine Z as a 3x1 matrix
+    Z = {Z(0), Z(1), 0};
+    // collect all z_bar measurements
+    baroRawValues.push_back(z_bar);
+    // determine z_bar bias by calculating average of all measurements
+    baroBias = calculate_mean(baroRawValues);
+    // assignment of bias to Z matrix
+    Z(2) = baroBias;
+    // assignment of corrected z_bar measurement
+    z_bar = z_bar - baroBias;
+    baroCorrectedValues.push_back(z_bar);
 
-    // if (baro.size() > 100) {
-    //     ROS_INFO("Baro Variance: %7.3lf", calculate_var(baro));
-    //     baro.erase(baro.begin());
-    // }
+    if (baroCorrectedValues.size() > 100) {
+        ROS_INFO("Baro Variance: %lf", calculate_var(baroCorrectedValues));
+        baroCorrectedValues.erase(baroCorrectedValues.begin());
+    }
 
 }
 
@@ -243,6 +247,11 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "hector_motion");
     ros::NodeHandle nh;
+
+    std::string dir;
+    nh.getParam("dir", dir);
+    std::ofstream data_file;
+    data_file.open(dir + "/data.txt");
 
     // --------- parse parameters ----------
     double motion_iter_rate;
@@ -357,6 +366,8 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
             ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2)); // bias, changed to 2 because matrix(3) is vector(2)
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
+
+            data_file << "z_bar var: " << calculate_var(baroCorrectedValues) << std::endl;
         }
 
         //  Publish pose and vel
