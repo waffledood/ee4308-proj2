@@ -162,7 +162,6 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     // EKF Correction for x state 
     x_gps = GPS(0);
-    // kalman_gain_x = P_x * jacobian.t() * 1 / ( jacobian * P_x * jacobian.t() + r_gps_x );
     kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
                       P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
     X = X + kalman_gain_x * ( x_gps - X(0) );
