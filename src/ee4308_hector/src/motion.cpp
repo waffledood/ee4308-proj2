@@ -114,6 +114,12 @@ double eSqr, pvrc; // e^2 and N(φ)
 cv::Matx31d initial_ECEF = {NaN, NaN, NaN};
 cv::Matx31d ECEF = {NaN, NaN, NaN};
 cv::Matx31d NED = {NaN, NaN, NaN};
+// Variables for EKF Correction (GPS)
+double x_gps, y_gps, z_gps;
+cv::Matx12d jacobian = {1, 0};
+cv::Matx21d kalman_gain_x = {0, 0};
+cv::Matx21d kalman_gain_y = {0, 0};
+cv::Matx21d kalman_gain_z = {0, 0};
 void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 {
     if (!ready)
@@ -153,6 +159,29 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
+
+    // EKF Correction for x state 
+    x_gps = GPS(0);
+    // kalman_gain_x = P_x * jacobian.t() * 1 / ( jacobian * P_x * jacobian.t() + r_gps_x );
+    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x , 1) ,
+                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, 1) };
+    X = X + kalman_gain_x * ( x_gps - X(0) );
+    P_x = P_x - ( kalman_gain_x * jacobian * P_x );
+
+    // EKF Correction for y state 
+    y_gps = GPS(1);
+    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y , 1) ,
+                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, 1) };
+    Y = Y + kalman_gain_y * ( y_gps - Y(0) );
+    P_y = P_y - ( kalman_gain_y * jacobian * P_y );
+
+    // EKF Correction for z state 
+    z_gps = GPS(2);
+    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z , 1) ,
+                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, 1) };
+    Z = Z + kalman_gain_z * ( y_gps - Z(0) );
+    P_z = P_z - ( kalman_gain_z * jacobian * P_z );
+
 }
 
 // --------- Magnetic ----------
