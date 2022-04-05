@@ -163,22 +163,22 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     // EKF Correction for x state 
     x_gps = GPS(0);
     // kalman_gain_x = P_x * jacobian.t() * 1 / ( jacobian * P_x * jacobian.t() + r_gps_x );
-    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1) ,
-                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1) };
+    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
+                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
     X = X + kalman_gain_x * ( x_gps - X(0) );
     P_x = P_x - ( kalman_gain_x * jacobian * P_x );
 
     // EKF Correction for y state 
     y_gps = GPS(1);
-    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1) ,
-                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1) };
+    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
+                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
     Y = Y + kalman_gain_y * ( y_gps - Y(0) );
     P_y = P_y - ( kalman_gain_y * jacobian * P_y );
 
     // EKF Correction for z state 
     z_gps = GPS(2);
-    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1) ,
-                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1) };
+    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
+                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
     Z = Z + kalman_gain_z * ( y_gps - Z(0) );
     P_z = P_z - ( kalman_gain_z * jacobian * P_z );
 
@@ -188,6 +188,9 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 double a_mgn = NaN;
 double r_mgn_a;
 vector<double> magnetic;
+// Variables for EKF Correction (Magentometer)
+cv::Matx21d kalman_gain_a = {0, 0};
+
 void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 {
     if (!ready)
@@ -197,6 +200,12 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     double mx = msg->vector.x;
     double my = msg->vector.y;
     a_mgn = atan2(-my, mx);
+
+    // EKF Correction for a (yaw) state 
+    kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
+                      P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
+    A = A + kalman_gain_a * ( a_mgn - A(0) );
+    P_a = P_a - ( kalman_gain_a * jacobian * P_a );
 
     // covariance
     // magnetic.push_back(a_mgn);
