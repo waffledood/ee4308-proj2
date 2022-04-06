@@ -243,6 +243,7 @@ int main(int argc, char **argv)
         if (verbose)
         {
             ROS_INFO(" HMOVE : Target(%6.3f, %6.3f, %6.3f) VX(%6.3f) VY(%6.3f) VZ(%7.3f)", target_x, target_y, target_z, cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z);
+            ROS_INFO(" Z_POSE_ERROR: %6.3f", z_pos_error); 
         }
 
         // wait for rate
