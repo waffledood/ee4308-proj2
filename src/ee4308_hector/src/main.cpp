@@ -212,13 +212,17 @@ int main(int argc, char **argv)
             goal.pose.position.y = initial_y;
             goal.pose.position.z = height;
 
-            if (!nh.param("/turtle/run", false))
-            { // when the turtle reaches the final goal
-                state = LAND;
-            }
-            else if (dist_euc(x,y,initial_x,initial_y) < close_enough)
-            {
-                state = TURTLE;
+            if (dist_euc(x, y, initial_x, initial_y) < close_enough)
+            {   
+                if (!nh.param("/turtle/run", false))
+                {
+                    // when the turtle reaches the final goal
+                    state = LAND;
+                }
+                else 
+                {
+                    state = TURTLE;
+                }
             }
         }
         else if (state == GOAL)
@@ -255,7 +259,7 @@ int main(int argc, char **argv)
         // distance to goal
         double dist = sqrt(dx * dx + dy * dy + dz * dz);
 
-        if (state == TAKEOFF || (state == LAND && goal.pose.position.z == 0.0))
+        if (state == TAKEOFF || state == LAND)
         {
           // normalize x, y, z components
           double unit_x = dx / dist;
