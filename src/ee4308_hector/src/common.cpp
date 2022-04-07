@@ -91,6 +91,7 @@ double sat(double calc, double max) {
     } else {
         return calc;
     }
+}
     
 double calculate_mean(std::vector<double>& vec)
 {
