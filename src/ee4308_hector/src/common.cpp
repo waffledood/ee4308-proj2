@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include <cmath>
+#include <vector>
 
 Index::Index() : i(0), j(0) {};
 Index::Index(int i, int j) : i(i), j(j) {};
@@ -80,6 +81,7 @@ double limit_angle(double angle)
     return result >= 0 ? result - M_PI : result + M_PI;
 }
 
+
 double sat(double calc, double max) {
 
     if (calc > max) {
@@ -89,4 +91,29 @@ double sat(double calc, double max) {
     } else {
         return calc;
     }
+    
+double calculate_mean(std::vector<double>& vec)
+{
+    double sum = 0;
+    int size = vec.size();
+
+    for (int i = 0; i < size; i++) {
+        sum += vec.at(i);
+    }
+
+    return sum / size;
+}
+
+double calculate_var(std::vector<double>& vec)
+{
+    float var = 0, mean;
+    int size = vec.size();
+
+    mean = calculate_mean(vec);
+
+    for (int i = 0; i < size; i++) {
+        var += (vec.at(i) - mean) * (vec.at(i) - mean);
+    }
+
+    return var / (size - 1);
 }

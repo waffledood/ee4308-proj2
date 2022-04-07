@@ -6,6 +6,7 @@
     <param name="initial_y" value="$(env HECTOR_Y)" type="double"/>
     <param name="initial_z" value="$(env HECTOR_Z)" type="double"/>
     <param name="run" value="true" type="bool"/>
+    <param name="dir" value="$(find ee4308_hector)"/>
 
     <!-- Nodes -->
     <node pkg="ee4308_hector" type="hector_main" name="hector_main" output="screen" />
