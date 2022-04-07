@@ -32,6 +32,7 @@ double prev_imu_t = 0;
 cv::Matx21d X = {0, 0}, Y = {0, 0}; // see intellisense. This is equivalent to cv::Matx<double, 2, 1>
 cv::Matx21d A = {0, 0};
 cv::Matx21d Z = {0, 0};
+// cv::Matx31d Z = {0, 0, 0};
 cv::Matx22d P_x = cv::Matx22d::ones(), P_y = cv::Matx22d::zeros();
 cv::Matx22d P_a = cv::Matx22d::ones();
 cv::Matx22d P_z = cv::Matx22d::ones();
@@ -62,21 +63,28 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //// additional variables ////
     // yaw
     double a = A(0);
+    
+    // bias of IMU
+
 
     // x // 
     // F_x, W_x, Jacobian matrices of x_axis
     cv::Matx22d F_x = {1, imu_dt, 0, 1};
-    cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a), 0.5 * pow(imu_dt, 2) * sin(a),
-                       -imu_dt * cos(a), imu_dt * sin(a)};
+    cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
+                       -imu_dt * cos(a),                imu_dt * sin(a)};
     // Qx, diagonal covariance matrix of the IMU noise in the IMU frame along the x-axis
     cv::Matx22d Q_x = {qx, 0, 0, qy};
+    // Ux
+    cv::Matx21d U_x = {ux, uy};
 
     // y // 
     // F_y, W_y, Jacobian matrices of y_axis
-    cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a), -0.5 * pow(imu_dt, 2) * sin(a),
-                       -imu_dt * cos(a), -imu_dt * sin(a)};
+    cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a),  -0.5 * pow(imu_dt, 2) * sin(a),
+                       -imu_dt * cos(a),                -imu_dt * sin(a)};
     // Qy, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
     cv::Matx22d Q_y = {qy, 0, 0, qx};
+    // Uy
+    cv::Matx21d U_y = {uy, ux};
 
     // z //
     // F_z, W_z, Jacobian matrices of z_axis
@@ -86,9 +94,19 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     // yaw //
     // F_a, W_a, Jacobian matrices of yaw
+    cv::Matx22d F_a = {1, 0, 0, 0};
     cv::Matx21d W_a = {imu_dt, 1};
     double Q_a = qa;
 
+    // EKF Prediction for States //
+    X = F_x * X + W_x * U_x;
+    Y = F_x * Y + W_y * U_y;
+    Z = F_x * Z + W_z * (uz - G);
+    A = F_a * A + W_a * ua;
+    ROS_INFO("[inside cbImu] ua: %6.3lf, A(0): %6.3lf, A(1): %6.3lf", ua, A(0), A(1));
+    // ROS_INFO("A(1): %6.3lf", A(1));
+
+    // EKF Prediction for Variance matrices //
     // predicting next state P_x
     P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
 
@@ -99,7 +117,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
 
     // predicting next state P_a
-    P_a = F_x * P_a * F_x.t() + W_a * Q_z * W_a.t();
+    P_a = F_a * P_a * F_a.t() + W_a * Q_a * W_a.t();
 }
 
 // --------- GPS ----------
@@ -207,11 +225,11 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     P_a = P_a - ( kalman_gain_a * jacobian * P_a );
 
     // covariance
-    // magnetic.push_back(a_mgn);
-    // if (magnetic.size() > 100) {
-    //     ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
-    //     magnetic.erase(magnetic.begin());
-    // }
+    magnetic.push_back(a_mgn);
+    if (magnetic.size() > 100) {
+        ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+        magnetic.erase(magnetic.begin());
+    }
 }
 
 // --------- Baro ----------
@@ -231,13 +249,13 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // covariance
     // redefine Z as a 3x1 matrix
-    Z = {Z(0), Z(1), 0};
+    // Z = {Z(0), Z(1), 0};
     // collect all z_bar measurements
     baroRawValues.push_back(z_bar);
     // determine z_bar bias by calculating average of all measurements
     baroBias = calculate_mean(baroRawValues);
     // assignment of bias to Z matrix
-    Z(2) = baroBias;
+    // Z(2) = baroBias;
     // assignment of corrected z_bar measurement
     z_bar = z_bar - baroBias;
     baroCorrectedValues.push_back(z_bar);
@@ -289,6 +307,9 @@ int main(int argc, char **argv)
     nh.getParam("dir", dir);
     std::ofstream data_file;
     data_file.open(dir + "/data.txt");
+
+    // debug info for A
+    ROS_INFO("[inside main] ua: %6.3lf, A(0): %6.3lf, A(1): %6.3lf", ua, A(0), A(1));
 
     // --------- parse parameters ----------
     double motion_iter_rate;
@@ -401,7 +422,7 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2)); // bias, changed to 2 because matrix(3) is vector(2)
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", baroBias); // bias, changed to 2 because matrix(3) is vector(2)
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
 
             data_file << "z_bar var: " << calculate_var(baroCorrectedValues) << std::endl;
