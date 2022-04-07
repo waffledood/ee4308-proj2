@@ -38,6 +38,8 @@ cv::Matx22d P_a = cv::Matx22d::ones();
 cv::Matx22d P_z = cv::Matx22d::ones();
 double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
+double Xb = NaN, Yb = NaN, Zb = NaN, Ab = NaN;
+bool bias = true;
 // see https://docs.opencv.org/3.4/de/de1/classcv_1_1Matx.html
 void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 {
@@ -63,9 +65,20 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //// additional variables ////
     // yaw
     double a = A(0);
+
     
     // bias of IMU
-
+    if (bias) {
+        Xb = ux;
+        Yb = uy;
+        Zb = uz - 9.8;
+        Ab = ua;
+        bias = false;
+    }
+    ux -= Xb;
+    uy -= Yb;
+    uz -= Zb;
+    Ab -= Ab;
 
     // x // 
     // F_x, W_x, Jacobian matrices of x_axis
@@ -103,8 +116,6 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     Y = F_x * Y + W_y * U_y;
     Z = F_x * Z + W_z * (uz - G);
     A = F_a * A + W_a * ua;
-    ROS_INFO("[inside cbImu] ua: %6.3lf, A(0): %6.3lf, A(1): %6.3lf", ua, A(0), A(1));
-    // ROS_INFO("A(1): %6.3lf", A(1));
 
     // EKF Prediction for Variance matrices //
     // predicting next state P_x
@@ -178,26 +189,26 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
 
-    // EKF Correction for x state 
-    x_gps = GPS(0);
-    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
-                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
-    X = X + kalman_gain_x * ( x_gps - X(0) );
-    P_x = P_x - ( kalman_gain_x * jacobian * P_x );
+    // // EKF Correction for x state 
+    // x_gps = GPS(0);
+    // kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
+    //                   P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
+    // X = X + kalman_gain_x * ( x_gps - X(0) );
+    // P_x = P_x - ( kalman_gain_x * jacobian * P_x );
 
-    // EKF Correction for y state 
-    y_gps = GPS(1);
-    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
-                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
-    Y = Y + kalman_gain_y * ( y_gps - Y(0) );
-    P_y = P_y - ( kalman_gain_y * jacobian * P_y );
+    // // EKF Correction for y state 
+    // y_gps = GPS(1);
+    // kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
+    //                   P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
+    // Y = Y + kalman_gain_y * ( y_gps - Y(0) );
+    // P_y = P_y - ( kalman_gain_y * jacobian * P_y );
 
-    // EKF Correction for z state 
-    z_gps = GPS(2);
-    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
-                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
-    Z = Z + kalman_gain_z * ( y_gps - Z(0) );
-    P_z = P_z - ( kalman_gain_z * jacobian * P_z );
+    // // EKF Correction for z state 
+    // z_gps = GPS(2);
+    // kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
+    //                   P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
+    // Z = Z + kalman_gain_z * ( y_gps - Z(0) );
+    // P_z = P_z - ( kalman_gain_z * jacobian * P_z );
 
 }
 
@@ -218,18 +229,18 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     double my = msg->vector.y;
     a_mgn = atan2(-my, mx);
 
-    // EKF Correction for a (yaw) state 
-    kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
-                      P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
-    A = A + kalman_gain_a * ( a_mgn - A(0) );
-    P_a = P_a - ( kalman_gain_a * jacobian * P_a );
+    // // EKF Correction for a (yaw) state 
+    // kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
+    //                   P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
+    // A = A + kalman_gain_a * ( a_mgn - A(0) );
+    // P_a = P_a - ( kalman_gain_a * jacobian * P_a );
 
-    // covariance
-    magnetic.push_back(a_mgn);
-    if (magnetic.size() > 100) {
-        ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
-        magnetic.erase(magnetic.begin());
-    }
+    // // covariance
+    // magnetic.push_back(a_mgn);
+    // if (magnetic.size() > 100) {
+    //     ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+    //     magnetic.erase(magnetic.begin());
+    // }
 }
 
 // --------- Baro ----------
@@ -251,9 +262,12 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     // redefine Z as a 3x1 matrix
     // Z = {Z(0), Z(1), 0};
     // collect all z_bar measurements
+    if (baroRawValues.empty()) {
+        baroBias = z_bar - 0.178;
+    }
     baroRawValues.push_back(z_bar);
     // determine z_bar bias by calculating average of all measurements
-    baroBias = calculate_mean(baroRawValues);
+    // baroBias = calculate_mean(baroRawValues);
     // assignment of bias to Z matrix
     // Z(2) = baroBias;
     // assignment of corrected z_bar measurement
