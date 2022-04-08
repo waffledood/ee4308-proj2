@@ -31,8 +31,7 @@ const double G = 9.8;
 double prev_imu_t = 0;
 cv::Matx21d X = {0, 0}, Y = {0, 0}; // see intellisense. This is equivalent to cv::Matx<double, 2, 1>
 cv::Matx21d A = {0, 0};
-cv::Matx21d Z = {0, 0};
-// cv::Matx31d Z = {0, 0, 0};
+cv::Matx21d Z = {0.178, 0};
 cv::Matx22d P_x = cv::Matx22d::ones(), P_y = cv::Matx22d::zeros();
 cv::Matx22d P_a = cv::Matx22d::ones();
 cv::Matx22d P_z = cv::Matx22d::ones();
@@ -170,8 +169,9 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     eSqr = 1 - pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2);
     pvrc = RAD_EQUATOR / sqrt(1 - eSqr * pow(sin(lat), 2));
 
-    ECEF = {(pvrc + alt) * cos(lat) * cos(lon), (pvrc + alt) * cos(lat) * sin(lon), 
-        pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2) * (pvrc + alt) * sin(lat)};
+    ECEF = {(pvrc + alt) * cos(lat) * cos(lon),
+        (pvrc + alt) * cos(lat) * sin(lon), 
+        (pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2) * pvrc + alt) * sin(lat)};
 
     // for initial message -- you may need this:
     if (std::isnan(initial_ECEF(0)))
@@ -189,19 +189,19 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
 
-    // // EKF Correction for x state 
-    // x_gps = GPS(0);
-    // kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
-    //                   P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
-    // X = X + kalman_gain_x * ( x_gps - X(0) );
-    // P_x = P_x - ( kalman_gain_x * jacobian * P_x );
+    // EKF Correction for x state 
+    x_gps = GPS(0);
+    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
+                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
+    X = X + kalman_gain_x * ( x_gps - X(0) );
+    P_x = P_x - ( kalman_gain_x * jacobian * P_x );
 
-    // // EKF Correction for y state 
-    // y_gps = GPS(1);
-    // kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
-    //                   P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
-    // Y = Y + kalman_gain_y * ( y_gps - Y(0) );
-    // P_y = P_y - ( kalman_gain_y * jacobian * P_y );
+    // EKF Correction for y state 
+    y_gps = GPS(1);
+    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
+                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
+    Y = Y + kalman_gain_y * ( y_gps - Y(0) );
+    P_y = P_y - ( kalman_gain_y * jacobian * P_y );
 
     // // EKF Correction for z state 
     // z_gps = GPS(2);
@@ -215,6 +215,7 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 // --------- Magnetic ----------
 double a_mgn = NaN;
 double r_mgn_a;
+double init_mgn;
 vector<double> magnetic;
 // Variables for EKF Correction (Magentometer)
 cv::Matx21d kalman_gain_a = {0, 0};
@@ -227,13 +228,17 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // IMPLEMENT Magnetic ////
     double mx = msg->vector.x;
     double my = msg->vector.y;
-    a_mgn = atan2(-my, mx);
 
-    // // EKF Correction for a (yaw) state 
-    // kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
-    //                   P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
-    // A = A + kalman_gain_a * ( a_mgn - A(0) );
-    // P_a = P_a - ( kalman_gain_a * jacobian * P_a );
+    if (std::isnan(a_mgn)) {
+        init_mgn = atan2(-my, mx);
+    }
+    a_mgn = atan2(-my, mx) - init_mgn;
+
+    // EKF Correction for a (yaw) state 
+    kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
+                      P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
+    A = A + kalman_gain_a * ( a_mgn - A(0) );
+    P_a = P_a - ( kalman_gain_a * jacobian * P_a );
 
     // // covariance
     // magnetic.push_back(a_mgn);
