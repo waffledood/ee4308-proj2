@@ -14,26 +14,26 @@ qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 1
-r_gps_y: 1
-r_gps_z: 1
+r_gps_x: 25
+r_gps_y: 25
+r_gps_z: 25
 enable_magnet: true
-r_mgn_a: 1.0e-1
+r_mgn_a: 0.000 // range from 0.000-0.001 for now, 0.000 most common
 enable_baro: true
-r_bar_z: 1.0e-1
+r_bar_z: 0.012 // currently ranges from 0.008-0.03, previously ranged from 0.015-0.024 for now
 enable_sonar: true
-r_snr_z: 1.0e-1
+r_snr_z: 0.000 // range from 0.000-0.000 for now, 0.001 most common
 motion_iter_rate: 20
 
 # move
 enable_move: true
-verbose_move: false
-Kp_lin: 1
-Ki_lin: 0.0
-Kd_lin: 0
-Kp_z: 1
-Ki_z: 0.0
-Kd_z: 0
+verbose_move: true
+Kp_lin: 1.1
+Ki_lin: 0
+Kd_lin: 0.6
+Kp_z: 1.3
+Ki_z: 0.01
+Kd_z: 0.2
 yaw_rate: 0.5
 max_lin_vel: 2
 max_z_vel: 0.5

@@ -37,6 +37,8 @@ include_directories(
 
 add_executable(
   hector_main
+    src/cubic_polynomial.cpp
+    src/cubic_hermite_spline.cpp
     src/common.cpp
     src/main.cpp)
 target_link_libraries(hector_main ${catkin_LIBRARIES} ${OpenCV_LIBS})

@@ -11,6 +11,7 @@
 #include <std_msgs/Bool.h>
 #include <opencv2/core/core.hpp>
 #include "common.hpp"
+#include "cubic_hermite_spline.h"
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
 enum HectorState
@@ -159,32 +160,160 @@ int main(int argc, char **argv)
         // get topics
         ros::spinOnce();
 
-        //// IMPLEMENT ////
-        // if (state == TAKEOFF)
-        // {
-            // // Disable Rotate
-            // msg_rotate.data = false;
-            // pub_rotate.publish(msg_rotate)
-        // }
-        // else if (state == TURTLE)
-        // {
-            
-        // }
-        // else if (state == START)
-        // {
-            // if (!nh.param("/turtle/run", false))
-            // { // when the turtle reaches the final goal
-                // state = LAND;
-            // }
-        // }
-        // else if (state == GOAL)
-        // {
-            
-        // }
-        // else if (state == LAND)
-        // {
-            
-        // }
+        geometry_msgs::PoseStamped hector_pose;
+        hector_pose.pose.position.x = x;
+        hector_pose.pose.position.y = y;
+        hector_pose.pose.position.z = z;
+        hector_pose.pose.orientation.w = 1.0;
+
+        geometry_msgs::PoseStamped goal;
+        goal.pose.orientation.w = 1.0; // use identity quaternion since orientation is not relevant
+
+        if (state == TAKEOFF) 
+        {
+            // Disable Rotate
+            msg_rotate.data = false;
+            pub_rotate.publish(msg_rotate);
+            ROS_INFO ("MAIN TAKEOFF");
+        }
+        else
+        {
+            // Enable Rotate
+            msg_rotate.data = true;
+            pub_rotate.publish(msg_rotate);
+            ROS_INFO("MAIN TAKEOFF IS DONE!");
+        }
+
+        if (state == TAKEOFF)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+            goal.pose.position.z = height;
+
+            if (std::abs(z - height) < close_enough)
+            {
+                state = TURTLE;
+            }
+        }
+        else if (state == TURTLE)
+        {
+            goal.pose.position.x = turtle_x;
+            goal.pose.position.y = turtle_y;
+            goal.pose.position.z = height;
+
+            if (dist_euc(x, y, turtle_x, turtle_y) < close_enough)
+            {
+                state = GOAL;
+            }
+        }
+        else if (state == START)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+            goal.pose.position.z = height;
+
+            if (dist_euc(x, y, initial_x, initial_y) < close_enough)
+            {   
+                if (!nh.param("/turtle/run", false))
+                {
+                    // when the turtle reaches the final goal
+                    state = LAND;
+                }
+                else 
+                {
+                    state = TURTLE;
+                }
+            }
+        }
+        else if (state == GOAL)
+        {
+            goal.pose.position.x = goal_x;
+            goal.pose.position.y = goal_y;
+            goal.pose.position.z = height;
+
+            if (dist_euc(x, y, goal_x, goal_y) < close_enough)
+            {
+                state = START;
+            }
+        }
+        else if (state == LAND)
+        {
+            goal.pose.position.x = initial_x;
+            goal.pose.position.y = initial_y;
+
+            if (dist_euc(x, y, initial_x, initial_y) < close_enough)
+            {
+                goal.pose.position.z = 0.0;
+            }
+            else
+            {
+                goal.pose.position.z = height;
+            }
+        }
+
+        // x, y, z component of distance to goal
+        double dx = goal.pose.position.x - x;
+        double dy = goal.pose.position.y - y;
+        double dz = goal.pose.position.z - z;
+
+        // distance to goal
+        double dist = sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (state == TAKEOFF || state == LAND)
+        {
+          // normalize x, y, z components
+          double unit_x = dx / dist;
+          double unit_y = dy / dist;
+          double unit_z = dz / dist;
+
+          // linear velocity of hector
+          double lin_vel = sqrt(vx * vx + vy * vy + vz * vz);
+
+          // prevent look ahead distance from being too small
+          lin_vel = std::max(lin_vel, 0.1);
+
+          // look ahead distance
+          double look_ahead_distance = lin_vel * look_ahead;
+
+          // prevent look ahead point from exceeding the goal
+          look_ahead_distance = std::min(look_ahead_distance, dist);
+
+          msg_target.point.x = x + unit_x * look_ahead_distance;
+          msg_target.point.y = y + unit_y * look_ahead_distance;
+          msg_target.point.z = z + unit_z * look_ahead_distance;
+
+          msg_traj.poses = {hector_pose, goal};
+        } 
+        else 
+        {
+          std::vector<Position> spline_points{Position(x, y), Position(goal.pose.position.x, goal.pose.position.y)};
+          std::vector<double> x_vel = {vx, 0.0};
+          std::vector<double> y_vel = {vy, 0.0};
+          double spline_duration = dist / average_speed;
+          std::vector<double> time = {0, spline_duration};
+          CubicHermiteSpline spline(spline_points, x_vel, y_vel, time);
+          std::vector<Position> sampled_points = spline.samplePoints(1 / main_iter_rate);
+
+          msg_traj.poses.clear();
+
+          for (auto &p : sampled_points)
+          {
+            geometry_msgs::PoseStamped pose;
+            pose.pose.position.x = p.x;
+            pose.pose.position.y = p.y;
+            pose.pose.position.z = z;
+            msg_traj.poses.push_back(pose);
+          }
+
+          double look_ahead_time = std::min(look_ahead, spline_duration);
+          Position look_ahead_pos = spline.evaluate(look_ahead_time);
+          msg_target.point.x = look_ahead_pos.x;
+          msg_target.point.y = look_ahead_pos.y;
+          msg_target.point.z = height;
+        }
+
+        pub_target.publish(msg_target);
+        pub_traj.publish(msg_traj);
 
         if (verbose)
             ROS_INFO_STREAM(" HMAIN : " << to_string(state));
