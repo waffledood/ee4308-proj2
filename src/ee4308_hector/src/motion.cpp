@@ -31,13 +31,14 @@ const double G = 9.8;
 double prev_imu_t = 0;
 cv::Matx21d X = {0, 0}, Y = {0, 0}; // see intellisense. This is equivalent to cv::Matx<double, 2, 1>
 cv::Matx21d A = {0, 0};
-cv::Matx21d Z = {0, 0};
-// cv::Matx31d Z = {0, 0, 0};
+cv::Matx21d Z = {0.178, 0};
 cv::Matx22d P_x = cv::Matx22d::ones(), P_y = cv::Matx22d::zeros();
 cv::Matx22d P_a = cv::Matx22d::ones();
 cv::Matx22d P_z = cv::Matx22d::ones();
 double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
+double Xb = NaN, Yb = NaN, Zb = NaN, Ab = NaN;
+bool bias = true;
 // see https://docs.opencv.org/3.4/de/de1/classcv_1_1Matx.html
 void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 {
@@ -63,61 +64,96 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //// additional variables ////
     // yaw
     double a = A(0);
+
     
-    // bias of IMU
+    // // bias of IMU
+    // if (bias) {
+    //     Xb = ux;
+    //     Yb = uy;
+    //    Zb = uz - 9.8;
+    //     Ab = ua;
+    //     bias = false;
+    // }
+    // ux -= Xb;
+    // uy -= Yb;
+    // uz -= Zb;
+    // Ab -= Ab;
 
+    // // x // 
+    // // F_x, W_x, Jacobian matrices of x_axis
+    // cv::Matx22d F_x = {1, imu_dt, 0, 1};
+    // cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
+    //                    -imu_dt * cos(a),                imu_dt * sin(a)};
+    // // Qx, diagonal covariance matrix of the IMU noise in the IMU frame along the x-axis
+    // cv::Matx22d Q_x = {qx, 0, 0, qy};
+    // // Ux
+    // cv::Matx21d U_x = {ux, uy};
 
-    // x // 
-    // F_x, W_x, Jacobian matrices of x_axis
-    cv::Matx22d F_x = {1, imu_dt, 0, 1};
-    cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
-                       -imu_dt * cos(a),                imu_dt * sin(a)};
-    // Qx, diagonal covariance matrix of the IMU noise in the IMU frame along the x-axis
-    cv::Matx22d Q_x = {qx, 0, 0, qy};
-    // Ux
-    cv::Matx21d U_x = {ux, uy};
+    // // y // 
+    // // F_y, W_y, Jacobian matrices of y_axis
+    // cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a),  -0.5 * pow(imu_dt, 2) * sin(a),
+    //                    -imu_dt * cos(a),                -imu_dt * sin(a)};
+    // // Qy, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
+    // cv::Matx22d Q_y = {qy, 0, 0, qx};
+    // // Uy
+    // cv::Matx21d U_y = {uy, ux};
 
-    // y // 
-    // F_y, W_y, Jacobian matrices of y_axis
-    cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a),  -0.5 * pow(imu_dt, 2) * sin(a),
-                       -imu_dt * cos(a),                -imu_dt * sin(a)};
-    // Qy, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
-    cv::Matx22d Q_y = {qy, 0, 0, qx};
-    // Uy
-    cv::Matx21d U_y = {uy, ux};
+    // // z //
+    // // F_z, W_z, Jacobian matrices of z_axis
+    // cv::Matx21d W_z = {0.5 * pow(imu_dt, 2), imu_dt};
+    // // Qz, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
+    // double Q_z = qz;
 
-    // z //
-    // F_z, W_z, Jacobian matrices of z_axis
-    cv::Matx21d W_z = {0.5 * pow(imu_dt, 2), imu_dt};
-    // Qz, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
-    double Q_z = qz;
+    // // yaw //
+    // // F_a, W_a, Jacobian matrices of yaw
+    // cv::Matx22d F_a = {1, 0, 0, 0};
+    // cv::Matx21d W_a = {imu_dt, 1};
+    // double Q_a = qa;
 
-    // yaw //
-    // F_a, W_a, Jacobian matrices of yaw
-    cv::Matx22d F_a = {1, 0, 0, 0};
-    cv::Matx21d W_a = {imu_dt, 1};
-    double Q_a = qa;
+    // // EKF Prediction for States //
+    // X = F_x * X + W_x * U_x;
+    // Y = F_x * Y + W_y * U_y;
+    // Z = F_x * Z + W_z * (uz - G);
+    // A = F_a * A + W_a * ua;
 
-    // EKF Prediction for States //
-    X = F_x * X + W_x * U_x;
-    Y = F_x * Y + W_y * U_y;
-    Z = F_x * Z + W_z * (uz - G);
-    A = F_a * A + W_a * ua;
-    ROS_INFO("[inside cbImu] ua: %6.3lf, A(0): %6.3lf, A(1): %6.3lf", ua, A(0), A(1));
-    // ROS_INFO("A(1): %6.3lf", A(1));
+    // // EKF Prediction for Variance matrices //
+    // // predicting next state P_x
+    // P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
 
-    // EKF Prediction for Variance matrices //
-    // predicting next state P_x
-    P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
+    // // predicting next state P_y
+    // P_y = F_x * P_y * F_x.t() + W_y * Q_y * W_y.t();
 
-    // predicting next state P_y
-    P_y = F_x * P_y * F_x.t() + W_y * Q_y * W_y.t();
+    // // predicting next state P_z
+    // P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
 
-    // predicting next state P_z
-    P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
+    // // predicting next state P_a
+    // P_a = F_a * P_a * F_a.t() + W_a * Q_a * W_a.t();
 
-    // predicting next state P_a
-    P_a = F_a * P_a * F_a.t() + W_a * Q_a * W_a.t();
+    // IMPLEMENT IMU ////
+    cv::Matx22d F = {1, imu_dt, 0, 1};
+    cv::Matx22d Fa = {1, 0, 0, 0};
+    cv::Matx<double, 2,1> Ux = {ux, uy};
+    cv::Matx<double, 2,1> Uy = {ux, uy};
+    cv::Matx<double, 1,1> Uz = {uz-G};
+    cv::Matx<double, 1,1> Ua = {ua};
+    cv::Matx22d Wx = {-0.5*imu_dt*imu_dt*cos(A(0,0)), 0.5*imu_dt*imu_dt*sin(A(0,0)), -imu_dt*cos(A(0,0)), imu_dt*sin(A(0,0))};
+    cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(A(0,0)), -0.5*imu_dt*imu_dt*cos(A(0,0)), -imu_dt*sin(A(0,0)), imu_dt*cos(A(0,0))};
+    cv::Matx21d Wz = {0.5*imu_dt*imu_dt, imu_dt};
+    cv::Matx21d Wa = {imu_dt, 1};
+    cv::Matx22d Qx = {qx, 0, 0, qy};
+    cv::Matx22d Qy = {qx, 0, 0, qy};
+    cv::Matx<double, 1,1> Qz = {qz};
+    cv::Matx<double, 1,1> Qa = {ua};
+
+    X = F*X + Wx*Ux;
+    Y = F*Y + Wy*Uy;
+    Z = F*Z + Wz*Uz;
+    A = Fa*A + Wa*Ua;
+    
+    P_x = F*P_x*F.t() + Wx*Qx*Wx.t();
+    P_y = F*P_y*F.t() + Wy*Qy*Wy.t();
+    P_z = F*P_z*F.t() + Wz*Qz*Wz.t();
+    P_a = Fa*P_a*Fa.t() + Wa*Qa*Wa.t();
 }
 
 // --------- GPS ----------
@@ -159,8 +195,9 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     eSqr = 1 - pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2);
     pvrc = RAD_EQUATOR / sqrt(1 - eSqr * pow(sin(lat), 2));
 
-    ECEF = {(pvrc + alt) * cos(lat) * cos(lon), (pvrc + alt) * cos(lat) * sin(lon), 
-        pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2) * (pvrc + alt) * sin(lat)};
+    ECEF = {(pvrc + alt) * cos(lat) * cos(lon),
+        (pvrc + alt) * cos(lat) * sin(lon), 
+        (pow(RAD_POLAR,2) / pow(RAD_EQUATOR,2) * pvrc + alt) * sin(lat)};
 
     // for initial message -- you may need this:
     if (std::isnan(initial_ECEF(0)))
@@ -204,9 +241,8 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 // --------- Magnetic ----------
 double a_mgn = NaN;
 double r_mgn_a;
+double init_mgn;
 vector<double> magnetic;
-// Variables for EKF Correction (Magentometer)
-cv::Matx21d kalman_gain_a = {0, 0};
 
 void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 {
@@ -216,20 +252,28 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // IMPLEMENT Magnetic ////
     double mx = msg->vector.x;
     double my = msg->vector.y;
-    a_mgn = atan2(-my, mx);
+    if (std::isnan(a_mgn)) {
+        init_mgn = atan2(-my, mx);
+    }
+    a_mgn = atan2(-my, mx) - init_mgn;
+
+    // Variables for EKF Correction (Magnetometer)
+    cv::Matx21d kalman_gain_a = {0, 0};
+    cv::Matx<double, 1, 2> H_a = {1.0, 0.0};
+    int V_a = 1;
+    cv::Matx<double, 1, 1> Y_a = {a_mgn};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_a = { P_a(0,0) * pow( P_a(0,0) + r_mgn_a, -1 ) ,
-                      P_a(1,0) * pow( P_a(0,0) + r_mgn_a, -1 ) };
-    A = A + kalman_gain_a * ( a_mgn - A(0) );
-    P_a = P_a - ( kalman_gain_a * jacobian * P_a );
+    kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + V_a*Y_a*V_a).inv();
+    A = A + kalman_gain_a*(a_mgn- A(0));
+    P_a = P_a - kalman_gain_a*H_a*P_a;
 
-    // covariance
-    magnetic.push_back(a_mgn);
-    if (magnetic.size() > 100) {
-        ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
-        magnetic.erase(magnetic.begin());
-    }
+    // // covariance
+    // magnetic.push_back(a_mgn);
+    // if (magnetic.size() > 100) {
+    //     ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+    //     magnetic.erase(magnetic.begin());
+    // }
 }
 
 // --------- Baro ----------
@@ -238,6 +282,8 @@ double r_bar_z;
 vector<double> baroRawValues;
 vector<double> baroCorrectedValues;
 double baroBias;
+cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
+cv::Matx33d P_z_new = cv::Matx33d::ones();
 
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
@@ -251,14 +297,31 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     // redefine Z as a 3x1 matrix
     // Z = {Z(0), Z(1), 0};
     // collect all z_bar measurements
+    if (baroRawValues.empty()) {
+        baroBias = z_bar - 0.178;
+    }
     baroRawValues.push_back(z_bar);
     // determine z_bar bias by calculating average of all measurements
-    baroBias = calculate_mean(baroRawValues);
+    // baroBias = calculate_mean(baroRawValues);
     // assignment of bias to Z matrix
     // Z(2) = baroBias;
     // assignment of corrected z_bar measurement
     z_bar = z_bar - baroBias;
     baroCorrectedValues.push_back(z_bar);
+
+    // Variables for EKF Correction (Baro)
+    cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
+    cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
+    P_z_new(0,0) = P_z(0,0);
+    P_z_new(1,1) = P_z(1,1);
+    P_z_new(2,2) = r_bar_z;
+    cv::Matx31d kalman_gain_z = {0, 0, 0};
+    cv::Matx<double, 1, 1> r_z = {r_bar_z};
+
+    // EKF Correction for z state
+    kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
+    Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
+    P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
 
     if (baroCorrectedValues.size() > 100) {
         ROS_INFO("Baro Variance: %lf", calculate_var(baroCorrectedValues));
@@ -281,6 +344,17 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
+
+    // Variables for EKF Correction (Sonar)
+    cv::Matx21d kalman_gain_z = {0, 0};
+    cv::Matx<double, 1, 2> H_z = {1.0, 0.0};
+    int V_z = 1;
+    cv::Matx<double, 1, 1> Y_z = {z_snr};
+
+    // EKF Correction for a (yaw) state 
+    kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + V_z*Y_z*V_z).inv();
+    Z = Z + kalman_gain_z*(z_snr- Z(0));
+    P_z = P_z - kalman_gain_z*H_z*P_z;
 
     // covariance
     // sonar.push_back(z_snr);
