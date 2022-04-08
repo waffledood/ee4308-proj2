@@ -163,7 +163,11 @@ int main(int argc, char **argv)
         pub_cmd.publish(msg_cmd);
 
         //// IMPLEMENT /////
-
+        
+        // For tuning purposes
+        //target_x = 4.0;
+        //target_y = 4.0;
+        
         // Frame Transformation (from absolute to drone frame)
         c_theta = cos(-a);
         s_theta = sin(-a);
@@ -232,7 +236,6 @@ int main(int argc, char **argv)
             }
         } else 
         {
-            ROS_INFO("TAKEOFF MODE");
             cmd_lin_vel_x = 0;
             cmd_lin_vel_y = 0;
             cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel); 
@@ -244,6 +247,7 @@ int main(int argc, char **argv)
         {
             ROS_INFO(" HMOVE : Target(%6.3f, %6.3f, %6.3f) VX(%6.3f) VY(%6.3f) VZ(%7.3f)", target_x, target_y, target_z, cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z);
             ROS_INFO(" Z_POSE_ERROR: %6.3f", z_pos_error); 
+            ROS_INFO(" X_POSE %6.3f , Y_POSE: %6.3f , Z_POSE: %6.3f" , x, y, z);
         }
 
         // wait for rate
