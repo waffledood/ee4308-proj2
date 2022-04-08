@@ -67,13 +67,13 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     
     // // bias of IMU
-    if (bias) {
+    // if (bias) {
     //     Xb = ux;
     //     Yb = uy;
     //    Zb = uz - 9.8;
     //     Ab = ua;
     //     bias = false;
-    }
+    // }
     // ux -= Xb;
     // uy -= Yb;
     // uz -= Zb;
@@ -229,12 +229,12 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     Y = Y + kalman_gain_y * ( y_gps - Y(0) );
     P_y = P_y - ( kalman_gain_y * jacobian * P_y );
 
-    // // EKF Correction for z state 
-    // z_gps = GPS(2);
-    // kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
-    //                   P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
-    // Z = Z + kalman_gain_z * ( y_gps - Z(0) );
-    // P_z = P_z - ( kalman_gain_z * jacobian * P_z );
+    // EKF Correction for z state 
+    z_gps = GPS(2);
+    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
+                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
+    Z = Z + kalman_gain_z * ( y_gps - Z(0) );
+    P_z = P_z - ( kalman_gain_z * jacobian * P_z );
 
 }
 
@@ -282,6 +282,8 @@ double r_bar_z;
 vector<double> baroRawValues;
 vector<double> baroCorrectedValues;
 double baroBias;
+cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
+cv::Matx33d P_z_new = cv::Matx33d::ones();
 
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
@@ -306,6 +308,20 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     // assignment of corrected z_bar measurement
     z_bar = z_bar - baroBias;
     baroCorrectedValues.push_back(z_bar);
+
+    // Variables for EKF Correction (Baro)
+    cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
+    cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
+    P_z_new(0,0) = P_z(0,0);
+    P_z_new(1,1) = P_z(1,1);
+    P_z_new(2,2) = r_bar_z;
+    cv::Matx31d kalman_gain_z = {0, 0, 0};
+    cv::Matx<double, 1, 1> r_z = {r_bar_z};
+
+    // EKF Correction for z state
+    kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
+    Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
+    P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
 
     if (baroCorrectedValues.size() > 100) {
         ROS_INFO("Baro Variance: %lf", calculate_var(baroCorrectedValues));
