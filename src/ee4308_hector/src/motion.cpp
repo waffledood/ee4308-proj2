@@ -39,6 +39,10 @@ double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
 double Xb = NaN, Yb = NaN, Zb = NaN, Ab = NaN;
 bool bias = true;
+vector<double> UX;
+vector<double> UY;
+vector<double> UZ;
+vector<double> UA;
 // see https://docs.opencv.org/3.4/de/de1/classcv_1_1Matx.html
 void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 {
@@ -64,6 +68,19 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //// additional variables ////
     // yaw
     double a = A(0,0);
+
+    // covariance
+    // UX.push_back(ux);
+    // UY.push_back(uy);
+    // UZ.push_back(uz);
+    // UA.push_back(ua);
+    // if (UX.size() > 100) {
+    //     ROS_INFO("Variance: %1.5lf %1.5lf %1.5lf %1.5lf", calculate_var(UX), calculate_var(UY), calculate_var(UZ), calculate_var(UA));
+    //     UX.erase(UX.begin());
+    //     UY.erase(UY.begin());
+    //     UZ.erase(UZ.begin());
+    //     UA.erase(UA.begin());
+    // }
 
     
     // // bias of IMU
@@ -130,6 +147,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 // https://docs.ros.org/en/api/sensor_msgs/html/msg/NavSatFix.html
 cv::Matx31d GPS = {NaN, NaN, NaN};
 cv::Matx31d initial_pos = {NaN, NaN, NaN}; // written below in main. no further action needed.
+cv::Matx31d cov = {NaN, NaN, NaN};
 const double DEG2RAD = M_PI / 180;
 const double RAD_POLAR = 6356752.3;
 const double RAD_EQUATOR = 6378137;
@@ -148,10 +166,6 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double lon = msg->longitude;
     double alt = msg->altitude;
     boost::array<double, 9> array_msg;
-
-    // covariance
-    // array_msg = msg->position_covariance;
-    // ROS_INFO("GPS covariance\n %7.3lf %7.3lf %7.3lf\n %7.3lf %7.3lf %7.3lf\n %7.3lf %7.3lf %7.3lf", array_msg[0], array_msg[1], array_msg[2], array_msg[3], array_msg[4], array_msg[5], array_msg[6], array_msg[7], array_msg[8]);
 
     lat *= DEG2RAD;
     lon *= DEG2RAD;
@@ -178,6 +192,12 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
+
+    // // covariance
+    // array_msg = msg->position_covariance;
+    
+    // ROS_INFO("GPS covariance\n %7.3lf %7.3lf %7.3lf", array_msg[0], array_msg[4], array_msg[8]);
+
 
     // // Variables for EKF Correction (GPS)
     // double x_gps, y_gps, z_gps;
@@ -261,7 +281,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // // covariance
     // magnetic.push_back(a_mgn);
     // if (magnetic.size() > 100) {
-    //     ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+    //     ROS_INFO("Magnetic Variance: %1.5lf", calculate_var(magnetic));
     //     magnetic.erase(magnetic.begin());
     // }
 }
@@ -283,13 +303,14 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
 
-    // covariance
+
     // redefine Z as a 3x1 matrix
     // Z = {Z(0), Z(1), 0};
     // collect all z_bar measurements
     if (baroRawValues.empty()) {
         baroBias = z_bar - 0.178;
     }
+    // covariance
     baroRawValues.push_back(z_bar);
     // determine z_bar bias by calculating average of all measurements
     // baroBias = calculate_mean(baroRawValues);
@@ -313,10 +334,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
     P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
 
-    if (baroCorrectedValues.size() > 100) {
-        ROS_INFO("Baro Variance: %lf", calculate_var(baroCorrectedValues));
-        baroCorrectedValues.erase(baroCorrectedValues.begin());
-    }
+    // if (baroCorrectedValues.size() > 100) {
+    //     ROS_INFO("Baro Variance: %1.5lf", calculate_var(baroCorrectedValues));
+    //     baroCorrectedValues.erase(baroCorrectedValues.begin());
+    // }
 
 }
 
@@ -346,10 +367,10 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
 
-    // covariance
+    // // covariance
     // sonar.push_back(z_snr);
     // if (sonar.size() > 100) {
-    //     ROS_INFO("Sonar Variance: %7.3lf", calculate_var(sonar));
+    //     ROS_INFO("Sonar Variance: %1.5lf", calculate_var(sonar));
     //     sonar.erase(sonar.begin());
     // }
 }
