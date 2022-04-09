@@ -3,7 +3,7 @@ verbose_main: false
 main_iter_rate: 40
 height: 2
 look_ahead: 1
-close_enough: 0.2
+close_enough: 0.3
 average_speed: 2.0
 
 # motion
@@ -14,9 +14,9 @@ qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 25
-r_gps_y: 25
-r_gps_z: 25
+r_gps_x: 0.014522
+r_gps_y: 0.004728
+r_gps_z: 0.014374
 enable_magnet: true
 r_mgn_a: 0.000 
 # range from 0.000-0.001 for now, 0.000 most common
@@ -31,9 +31,9 @@ motion_iter_rate: 20
 # move
 enable_move: true
 verbose_move: true
-Kp_lin: 1
+Kp_lin: 1.1
 Ki_lin: 0.0
-Kd_lin: 0
+Kd_lin: 0.6
 Kp_z: 1.3
 Ki_z: 0.05
 Kd_z: 0.2
