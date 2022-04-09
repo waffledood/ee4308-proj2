@@ -63,7 +63,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     //// additional variables ////
     // yaw
-    double a = A(0);
+    double a = A(0,0);
 
     
     // // bias of IMU
@@ -79,17 +79,14 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // uz -= Zb;
     // Ab -= Ab;
 
-    // // x // 
-    // // F_x, W_x, Jacobian matrices of x_axis
-    // cv::Matx22d F_x = {1, imu_dt, 0, 1};
-    // cv::Matx22d W_x = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
-    //                    -imu_dt * cos(a),                imu_dt * sin(a)};
-    // // Qx, diagonal covariance matrix of the IMU noise in the IMU frame along the x-axis
-    // cv::Matx22d Q_x = {qx, 0, 0, qy};
-    // // Ux
-    // cv::Matx21d U_x = {ux, uy};
+    // x //
+    cv::Matx22d Fx = {1, imu_dt, 0, 1};
+    cv::Matx22d Wx = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
+                                    -imu_dt * cos(a),                imu_dt * sin(a)};
+    cv::Matx22d Qx = {qx, 0, 0, qy};
+    cv::Matx21d Ux = {ux, uy};
 
-    // // y // 
+    // y // 
     // // F_y, W_y, Jacobian matrices of y_axis
     // cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a),  -0.5 * pow(imu_dt, 2) * sin(a),
     //                    -imu_dt * cos(a),                -imu_dt * sin(a)};
@@ -98,62 +95,35 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // // Uy
     // cv::Matx21d U_y = {uy, ux};
 
-    // // z //
-    // // F_z, W_z, Jacobian matrices of z_axis
-    // cv::Matx21d W_z = {0.5 * pow(imu_dt, 2), imu_dt};
-    // // Qz, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
-    // double Q_z = qz;
-
-    // // yaw //
-    // // F_a, W_a, Jacobian matrices of yaw
-    // cv::Matx22d F_a = {1, 0, 0, 0};
-    // cv::Matx21d W_a = {imu_dt, 1};
-    // double Q_a = qa;
-
-    // // EKF Prediction for States //
-    // X = F_x * X + W_x * U_x;
-    // Y = F_x * Y + W_y * U_y;
-    // Z = F_x * Z + W_z * (uz - G);
-    // A = F_a * A + W_a * ua;
-
-    // // EKF Prediction for Variance matrices //
-    // // predicting next state P_x
-    // P_x = F_x * P_x * F_x.t() + W_x * Q_x * W_x.t();
-
-    // // predicting next state P_y
-    // P_y = F_x * P_y * F_x.t() + W_y * Q_y * W_y.t();
-
-    // // predicting next state P_z
-    // P_z = F_x * P_z * F_x.t() + W_z * Q_z * W_z.t();
-
-    // // predicting next state P_a
-    // P_a = F_a * P_a * F_a.t() + W_a * Q_a * W_a.t();
-
-    // IMPLEMENT IMU ////
-    cv::Matx22d F = {1, imu_dt, 0, 1};
-    cv::Matx22d Fa = {1, 0, 0, 0};
-    cv::Matx<double, 2,1> Ux = {ux, uy};
-    cv::Matx<double, 2,1> Uy = {ux, uy};
-    cv::Matx<double, 1,1> Uz = {uz-G};
-    cv::Matx<double, 1,1> Ua = {ua};
-    cv::Matx22d Wx = {-0.5*imu_dt*imu_dt*cos(A(0,0)), 0.5*imu_dt*imu_dt*sin(A(0,0)), -imu_dt*cos(A(0,0)), imu_dt*sin(A(0,0))};
-    cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(A(0,0)), -0.5*imu_dt*imu_dt*cos(A(0,0)), -imu_dt*sin(A(0,0)), imu_dt*cos(A(0,0))};
-    cv::Matx21d Wz = {0.5*imu_dt*imu_dt, imu_dt};
-    cv::Matx21d Wa = {imu_dt, 1};
-    cv::Matx22d Qx = {qx, 0, 0, qy};
+    // y // 
+    cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(a),  -0.5*imu_dt*imu_dt*cos(a),
+                                 -imu_dt*sin(a),              imu_dt*cos(a)};
     cv::Matx22d Qy = {qx, 0, 0, qy};
-    cv::Matx<double, 1,1> Qz = {qz};
-    cv::Matx<double, 1,1> Qa = {ua};
+    cv::Matx21d Uy = {ux, uy};
 
-    X = F*X + Wx*Ux;
-    Y = F*Y + Wy*Uy;
-    Z = F*Z + Wz*Uz;
-    A = Fa*A + Wa*Ua;
-    
-    P_x = F*P_x*F.t() + Wx*Qx*Wx.t();
-    P_y = F*P_y*F.t() + Wy*Qy*Wy.t();
-    P_z = F*P_z*F.t() + Wz*Qz*Wz.t();
-    P_a = Fa*P_a*Fa.t() + Wa*Qa*Wa.t();
+    // z //
+    cv::Matx21d Wz = {0.5 * pow(imu_dt, 2), imu_dt};
+    cv::Matx<double, 1,1> Qz = {qz};
+    cv::Matx<double, 1, 1> Uz = {uz - G};
+
+    // yaw //
+    cv::Matx22d Fa = {1, 0, 0, 0};
+    cv::Matx21d Wa = {imu_dt, 1};
+    //double Qa = qa;
+    cv::Matx<double, 1,1> Qa = {ua}; // TODO - project notes said to use qa, but others used ua!
+    cv::Matx<double, 1,1> Ua = {ua};
+
+    // EKF Prediction for State matrices //
+    X = Fx * X + Wx * Ux;
+    Y = Fx * Y + Wy * Uy;
+    Z = Fx * Z + Wz * Uz;
+    A = Fa * A + Wa * Ua;
+
+    // EKF Prediction for Variance matrices //
+    P_x = Fx * P_x * Fx.t() + Wx * Qx * Wx.t();
+    P_y = Fx * P_y * Fx.t() + Wy * Qy * Wy.t();
+    P_z = Fx * P_z * Fx.t() + Wz * Qz * Wz.t();
+    P_a = Fa * P_a * Fa.t() + Wa * Qa * Wa.t();
 }
 
 // --------- GPS ----------
@@ -168,12 +138,6 @@ double eSqr, pvrc; // e^2 and N(φ)
 cv::Matx31d initial_ECEF = {NaN, NaN, NaN};
 cv::Matx31d ECEF = {NaN, NaN, NaN};
 cv::Matx31d NED = {NaN, NaN, NaN};
-// Variables for EKF Correction (GPS)
-double x_gps, y_gps, z_gps;
-cv::Matx12d jacobian = {1, 0};
-cv::Matx21d kalman_gain_x = {0, 0};
-cv::Matx21d kalman_gain_y = {0, 0};
-cv::Matx21d kalman_gain_z = {0, 0};
 void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 {
     if (!ready)
@@ -215,26 +179,52 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
 
-    // EKF Correction for x state 
-    x_gps = GPS(0);
-    kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
-                      P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
-    X = X + kalman_gain_x * ( x_gps - X(0) );
-    P_x = P_x - ( kalman_gain_x * jacobian * P_x );
+    // // Variables for EKF Correction (GPS)
+    // double x_gps, y_gps, z_gps;
+    // cv::Matx12d jacobian = {1, 0};
+    // cv::Matx21d kalman_gain_x = {0, 0};
+    // cv::Matx21d kalman_gain_y = {0, 0};
+    // cv::Matx21d kalman_gain_z = {0, 0};
 
-    // EKF Correction for y state 
-    y_gps = GPS(1);
-    kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
-                      P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
-    Y = Y + kalman_gain_y * ( y_gps - Y(0) );
-    P_y = P_y - ( kalman_gain_y * jacobian * P_y );
+    // // EKF Correction for x state 
+    // x_gps = GPS(0);
+    // kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
+    //                   P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
+    // X = X + kalman_gain_x * ( x_gps - X(0) );
+    // P_x = P_x - ( kalman_gain_x * jacobian * P_x );
 
-    // EKF Correction for z state 
-    z_gps = GPS(2);
-    kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
-                      P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
-    Z = Z + kalman_gain_z * ( y_gps - Z(0) );
-    P_z = P_z - ( kalman_gain_z * jacobian * P_z );
+    // // EKF Correction for y state 
+    // y_gps = GPS(1);
+    // kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
+    //                   P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
+    // Y = Y + kalman_gain_y * ( y_gps - Y(0) );
+    // P_y = P_y - ( kalman_gain_y * jacobian * P_y );
+
+    // // EKF Correction for z state 
+    // z_gps = GPS(2);
+    // kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
+    //                   P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
+    // Z = Z + kalman_gain_z * ( y_gps - Z(0) );
+    // P_z = P_z - ( kalman_gain_z * jacobian * P_z );
+
+    // GPS Correction
+    cv::Matx21d Kx = {0, 0};
+    cv::Matx21d Ky = {0, 0};
+    cv::Matx21d Kz = {0, 0};
+    cv::Matx12d H = {1.0, 0};
+    cv::Matx<double,1,1> r_x = {r_gps_x}, r_y = {r_gps_y}, r_z = {r_gps_z};
+    
+    Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
+    X = X + Kx*(GPS(0) - (H*X)(0));
+    P_x = P_x - Kx*H*P_x;
+
+    Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
+    Y = Y + Ky*(GPS(1)-(H*Y)(0));
+    P_y = P_y - Ky*H*P_y;
+
+    Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
+    Z = Z + Kz*(GPS(2)-(H*Z)(0));
+    P_z = P_z - Kz*H*P_z;
 
 }
 
@@ -260,12 +250,12 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // Variables for EKF Correction (Magnetometer)
     cv::Matx21d kalman_gain_a = {0, 0};
     cv::Matx<double, 1, 2> H_a = {1.0, 0.0};
-    int V_a = 1;
     cv::Matx<double, 1, 1> Y_a = {a_mgn};
+    cv::Matx<double, 1,1> R_a = {r_mgn_a};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + V_a*Y_a*V_a).inv();
-    A = A + kalman_gain_a*(a_mgn- A(0));
+    kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + R_a).inv();
+    A = A + kalman_gain_a*(a_mgn - A(0));
     P_a = P_a - kalman_gain_a*H_a*P_a;
 
     // // covariance
@@ -348,11 +338,11 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     // Variables for EKF Correction (Sonar)
     cv::Matx21d kalman_gain_z = {0, 0};
     cv::Matx<double, 1, 2> H_z = {1.0, 0.0};
-    int V_z = 1;
+    cv::Matx<double, 1, 1> R_z = {r_snr_z};
     cv::Matx<double, 1, 1> Y_z = {z_snr};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + V_z*Y_z*V_z).inv();
+    kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
 
