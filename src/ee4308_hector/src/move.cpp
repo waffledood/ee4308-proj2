@@ -13,6 +13,7 @@
 #include <fstream>
 #include <signal.h>
 #include "common.hpp"
+#include <std_msgs/Float64.h>
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
 ros::ServiceClient en_mtrs;
@@ -57,6 +58,12 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "turtle_move");
     ros::NodeHandle nh;
+
+    std::string dir;
+    nh.getParam("dir", dir);
+
+    std::ofstream data_file;
+    data_file.open(dir + "/XandY.txt");
 
     // --------- parse parameters ----------
     bool enable_move;
@@ -130,6 +137,7 @@ int main(int argc, char **argv)
     double dt;
     double prev_time = ros::Time::now().toSec();
 
+    /*
     double x_pos_error, y_pos_error, z_pos_error;
     double past_x_pos_error = 0, past_y_pos_error = 0, past_z_pos_error = 0;
     double total_x = 0, total_y = 0, total_z = 0;
@@ -142,6 +150,22 @@ int main(int argc, char **argv)
     double past_pos_error = 0;
     double cmd_total_lin_vel;
 
+    double c_theta, s_theta;
+    */
+
+    double x_error = 0;
+    double x_prev_error = 0;
+    double x_error_total = 0;
+
+    double y_error = 0;
+    double y_prev_error = 0;
+    double y_error_total = 0;
+
+    double z_error = 0;
+    double z_prev_error = 0;
+    double z_error_total = 0;
+
+    double combined_vel;
     double c_theta, s_theta;
 
     // main loop
@@ -164,6 +188,9 @@ int main(int argc, char **argv)
 
         //// IMPLEMENT /////
 
+        //target_x = 4;
+        //target_y = 4;
+        /*
         // Frame Transformation (from absolute to drone frame)
         c_theta = cos(-a);
         s_theta = sin(-a);
@@ -175,10 +202,10 @@ int main(int argc, char **argv)
         pos_error = dist_euc(x, y, target_x, target_y);
 
         // Sumation of position errors
-        total_x += x_pos_error;
-        total_y += y_pos_error;
-        total_z += z_pos_error;
-        total_error += pos_error;
+        total_x += x_pos_error * dt;
+        total_y += y_pos_error * dt;
+        total_z += z_pos_error * dt;
+        total_error += pos_error * dt;
 
         // PID for total component
         total_portional = Kp_lin * pos_error;
@@ -239,13 +266,96 @@ int main(int argc, char **argv)
             cmd_lin_vel_a = 0;
         } 
 
+        */
+        
+        c_theta = cos(-a);
+        s_theta = sin(-a);
+
+        // X axis
+        double x_p = 0, x_i = 0, x_d = 0;
+        double temp_signal_x = 0, acc_x = 0;
+
+        x_prev_error = x_error;
+        x_error = c_theta * (target_x - x) - s_theta * (target_y - y);
+        x_p = Kp_lin * x_error;
+
+        x_error_total += (x_error * dt);
+        x_i = Ki_lin * x_error_total;
+
+        x_d = Kd_lin * ((x_error - x_prev_error)/dt);
+
+        temp_signal_x = x_p + x_i +x_d;
+
+        acc_x = (temp_signal_x - cmd_lin_vel_x)/dt;
+        cmd_lin_vel_x += acc_x * dt;
+
+        // Y axis
+        double y_p = 0, y_i = 0, y_d = 0;
+        double temp_signal_y = 0, acc_y = 0;
+        
+        y_prev_error = y_error;
+        y_error = s_theta * (target_x - x) + c_theta * (target_y - y);
+        y_p = Kp_lin * y_error;
+
+        y_error_total += (y_error * dt);
+        y_i = Ki_lin * y_error_total;
+
+        y_d = Kd_lin * ((y_error - y_prev_error)/dt);
+        
+        temp_signal_y = y_p + y_i + y_d;
+
+        acc_y = (temp_signal_y - cmd_lin_vel_y)/dt;
+        cmd_lin_vel_y += acc_y * dt;
+        
+
+        // Z axis
+        double z_p = 0, z_i = 0, z_d = 0;
+        double temp_signal_z = 0, acc_z = 0;
+        
+        z_prev_error = z_error;
+        z_error = target_z - z;
+        z_p = Kp_z * z_error;
+
+        z_error_total += (z_error * dt);
+        z_i = Ki_z * z_error_total;
+
+        z_d = Kd_z * ((z_error - z_prev_error)/dt);
+        
+        temp_signal_z = z_p + z_i + z_d;
+
+        acc_z = (temp_signal_z - cmd_lin_vel_z)/dt;
+        cmd_lin_vel_z += acc_z * dt;
+
+        cmd_lin_vel_z = sat(cmd_lin_vel_z + acc_z * dt, max_z_vel);
+
+
+        // Velocity Check
+        combined_vel = sqrt((cmd_lin_vel_x * cmd_lin_vel_x) + (cmd_lin_vel_y * cmd_lin_vel_y));
+        if (combined_vel > max_lin_vel) {
+            cmd_lin_vel_x = cmd_lin_vel_x * max_lin_vel / combined_vel;
+            cmd_lin_vel_y = cmd_lin_vel_y * max_lin_vel / combined_vel;
+        }
+
+        /*
+        // Rotate check
+        if(rotate) {
+            cmd_lin_vel_a = yaw_rate;
+        } else {
+            cmd_lin_vel_a = 0;
+        }
+        */
+        
+
+        //data_file << ros::Time::now().toSec() << "\t" << x_pos_error << "\t" << y_pos_error << std::endl;
+
+
         // verbose
         if (verbose)
         {
             ROS_INFO(" HMOVE : Target(%6.3f, %6.3f, %6.3f) VX(%6.3f) VY(%6.3f) VZ(%7.3f)", target_x, target_y, target_z, cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z);
-            ROS_INFO(" Z_POSE_ERROR: %6.3f", z_pos_error); 
+            //ROS_INFO(" X POSE ERROR: %6.3f , Y POSE ERROR: %6.3f , Z POSE ERROR: %6.3f " , x_pos_error, y_pos_error, z_pos_error);
         }
-
+        
         // wait for rate
         rate.sleep();
     }
@@ -264,5 +374,8 @@ int main(int argc, char **argv)
 
     ROS_INFO(" HMOVE : ===== END =====");
 
+    data_file.close();
+    
     return 0;
+
 }
