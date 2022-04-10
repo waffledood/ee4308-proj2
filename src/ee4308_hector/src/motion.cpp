@@ -106,7 +106,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     // y // 
     cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(a),  -0.5*imu_dt*imu_dt*cos(a),
-                                 -imu_dt*sin(a),              imu_dt*cos(a)};
+                                 -imu_dt*sin(a),             -imu_dt*cos(a)};
     cv::Matx22d Qy = {qx, 0, 0, qy};
     cv::Matx21d Uy = {ux, uy};
 
@@ -119,7 +119,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx22d Fa = {1, 0, 0, 0};
     cv::Matx21d Wa = {imu_dt, 1};
     //double Qa = qa;
-    cv::Matx<double, 1,1> Qa = {qa}; // TODO - project notes said to use qa, but others used ua!
+    cv::Matx<double, 1,1> Qa = {qa};
     cv::Matx<double, 1,1> Ua = {ua};
 
     // EKF Prediction for State matrices //
@@ -195,15 +195,21 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     cv::Matx<double,1,1> r_y = {r_gps_y};
     cv::Matx<double,1,1> r_z = {r_gps_z};
     
-    Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
+    cv::Matx<double, 1, 1> M = (H*P_x*H.t() + r_x);
+    Kx = P_x * H.t() * (1/M(0));
+    //Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
     X = X + Kx*(x_gps - X(0));
     P_x = P_x - Kx*H*P_x;
 
-    Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
+    M = (H*P_y*H.t() + r_y);
+    Ky = P_y * H.t() * (1/M(0));
+    //Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
     Y = Y + Ky*(y_gps - Y(0));
     P_y = P_y - Ky*H*P_y;
 
-    Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
+    M = (H*P_z*H.t() + r_z);
+    Kz = P_z * H.t() * (1/M(0));
+    //Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
     Z = Z + Kz*(z_gps - Z(0));
     P_z = P_z - Kz*H*P_z;
 }
@@ -234,7 +240,9 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     cv::Matx<double, 1,1> R_a = {r_mgn_a};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + R_a).inv();
+    cv::Matx<double, 1, 1> M = H_a*P_a*H_a.t() + R_a;
+    kalman_gain_a = P_a*H_a.t()*(1/M(0));
+    //kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + R_a).inv();
     A = A + kalman_gain_a*(a_mgn - A(0));
     P_a = P_a - kalman_gain_a*H_a*P_a;
 
@@ -288,7 +296,9 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     cv::Matx<double, 1, 1> r_z = {r_bar_z};
 
     // EKF Correction for z state
-    kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
+    cv::Matx<double, 1, 1> M = (H_z*P_z_new*H_z.t() + r_z);
+    kalman_gain_z = P_z_new*H_z.t()* (1/M(0));
+    // kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
     // Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
     Z_new = Z_new + kalman_gain_z*(z_bar-Z(0));
     P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
@@ -344,7 +354,9 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     // }
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
+    cv::Matx<double, 1, 1> M = (H_z*P_z*H_z.t() + R_z);
+    kalman_gain_z = P_z*H_z.t()* (1/M(0));
+    // kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
 
@@ -494,7 +506,8 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z_new(2)); // bias, changed to 2 because matrix(3) is vector(2)
+            //ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z_new(2)); // bias, changed to 2 because matrix(3) is vector(2)
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", pow(tp.z - Z(0), 2));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
 
             if (data_collection) {
