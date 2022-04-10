@@ -9,16 +9,16 @@ average_speed: 2.0
 # motion
 verbose_motion: true
 use_ground_truth: false
-qa: 1
+qa: 0.1
 qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 0.014522
-r_gps_y: 0.004728
+r_gps_x: 0.00014522
+r_gps_y: 0.00004728
 r_gps_z: 0.014374
 enable_magnet: true
-r_mgn_a: 0.000 
+r_mgn_a: 0.700 
 # range from 0.000-0.001 for now, 0.000 most common
 enable_baro: true
 r_bar_z: 0.012 
@@ -30,10 +30,10 @@ motion_iter_rate: 20
 
 # move
 enable_move: true
-verbose_move: true
+verbose_move: false
 Kp_lin: 1.1
 Ki_lin: 0.0
-Kd_lin: 0.6
+Kd_lin: 0.5
 Kp_z: 1.3
 Ki_z: 0.05
 Kd_z: 0.2
@@ -41,5 +41,8 @@ yaw_rate: 0.5
 max_lin_vel: 2
 max_z_vel: 0.5
 move_iter_rate: 40
+
+# data collection
+data_collection: true
 
 # run param used automatically and should not be written
