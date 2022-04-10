@@ -14,11 +14,11 @@ qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 0.00014522
-r_gps_y: 0.00004728
-r_gps_z: 0.014374
+r_gps_x: 0.0025
+r_gps_y: 0.0025
+r_gps_z: 0.0025
 enable_magnet: true
-r_mgn_a: 0.700 
+r_mgn_a: 0.00070 
 # range from 0.000-0.001 for now, 0.000 most common
 enable_baro: true
 r_bar_z: 0.01180
