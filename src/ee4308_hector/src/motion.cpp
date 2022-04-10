@@ -32,12 +32,10 @@ const double G = 9.8;
 double prev_imu_t = 0;
 cv::Matx21d X = {0, 0}, Y = {0, 0}; // see intellisense. This is equivalent to cv::Matx<double, 2, 1>
 cv::Matx21d A = {0, 0};
-cv::Matx21d Z = {0.178, 0};
-cv::Matx31d Z_alt = {0.178, 0, 0};
+cv::Matx31d Z = {0.178, 0, 0};
 cv::Matx22d P_x = cv::Matx22d::ones(), P_y = cv::Matx22d::zeros();
 cv::Matx22d P_a = cv::Matx22d::ones();
-cv::Matx22d P_z = cv::Matx22d::ones();
-cv::Matx33d P_z_alt = cv::Matx33d::ones();
+cv::Matx33d P_z = cv::Matx33d::ones();
 double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
 double Xb = NaN, Yb = NaN, Zb = NaN, Ab = NaN;
@@ -113,12 +111,9 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx21d Uy = {ux, uy};
 
     // z //
-    cv::Matx21d Wz = {0.5 * pow(imu_dt, 2), imu_dt};
+    cv::Matx31d Wz = {0.5 * pow(imu_dt, 2), imu_dt, 0};
     cv::Matx<double, 1,1> Qz = {qz};
     cv::Matx<double, 1, 1> Uz = {uz - G};
-
-    // z_alt //
-    cv::Matx31d Wz_alt = {0.5 * pow(imu_dt, 2), imu_dt, 0};
     cv::Matx33d Fz = {1, imu_dt, 0,
                       0, 1, 0,
                       0, 0, 1};
@@ -126,23 +121,20 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // yaw //
     cv::Matx22d Fa = {1, 0, 0, 0};
     cv::Matx21d Wa = {imu_dt, 1};
-    //double Qa = qa;
     cv::Matx<double, 1,1> Qa = {qa};
     cv::Matx<double, 1,1> Ua = {ua};
 
     // EKF Prediction for State matrices //
     X = Fx * X + Wx * Ux;
     Y = Fx * Y + Wy * Uy;
-    Z = Fx * Z + Wz * Uz;
+    Z = Fz * Z + Wz * Uz;
     A = Fa * A + Wa * Ua;
-    Z_alt = Fz * Z_alt + Wz_alt * Uz;
 
     // EKF Prediction for Variance matrices //
     P_x = Fx * P_x * Fx.t() + Wx * Qx * Wx.t();
     P_y = Fx * P_y * Fx.t() + Wy * Qy * Wy.t();
-    P_z = Fx * P_z * Fx.t() + Wz * Qz * Wz.t();
+    P_z = Fz * P_z * Fz.t() + Wz * Qz * Wz.t();
     P_a = Fa * P_a * Fa.t() + Wa * Qa * Wa.t();
-    P_z_alt = Fz * P_z_alt * Fz.t() + Wz_alt * Qz * Wz_alt.t();
 }
 
 // --------- GPS ----------
@@ -199,8 +191,7 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double x_gps = GPS(0), y_gps = GPS(1), z_gps = GPS(2);
     cv::Matx21d Kx = {0, 0};
     cv::Matx21d Ky = {0, 0};
-    cv::Matx21d Kz = {0, 0};
-    cv::Matx31d Kz_alt = {0, 0, 0};
+    cv::Matx31d Kz = {0, 0, 0};
     cv::Matx12d H = {1.0, 0};
     cv::Matx13d Hz = {1.0, 0, 0};
     cv::Matx<double,1,1> r_x = {r_gps_x};
@@ -209,27 +200,19 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     
     cv::Matx<double, 1, 1> M = (H*P_x*H.t() + r_x);
     Kx = P_x * H.t() * (1/M(0));
-    //Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
     X = X + Kx*(x_gps - X(0));
     P_x = P_x - Kx*H*P_x;    
 
     M = (H*P_y*H.t() + r_y);
     Ky = P_y * H.t() * (1/M(0));
-    //Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
     Y = Y + Ky*(y_gps - Y(0));
     P_y = P_y - Ky*H*P_y;
 
-    M = (H*P_z*H.t() + r_z);
-    Kz = P_z * H.t() * (1/M(0));
-    //Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
-    Z = Z + Kz*(z_gps - Z(0));
-    P_z = P_z - Kz*H*P_z;
-
     // new Z state matrix & variance matrix
-    M = (Hz*P_z_alt*Hz.t() + r_x);
-    Kz_alt = P_z_alt * Hz.t() * (1/M(0));
-    Z_alt = Z_alt + Kz_alt*(z_gps - Z_alt(0));
-    P_z_alt = P_z_alt - Kz_alt*Hz*P_z_alt;
+    M = (Hz*P_z*Hz.t() + r_x);
+    Kz = P_z * Hz.t() * (1/M(0));
+    Z = Z + Kz*(z_gps - Z(0));
+    P_z = P_z - Kz*Hz*P_z;
 }
 
 // --------- Magnetic ----------
@@ -260,7 +243,6 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // EKF Correction for a (yaw) state 
     cv::Matx<double, 1, 1> M = H_a*P_a*H_a.t() + R_a;
     kalman_gain_a = P_a*H_a.t()*(1/M(0));
-    //kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + R_a).inv();
     A = A + kalman_gain_a*(a_mgn - A(0));
     P_a = P_a - kalman_gain_a*H_a*P_a;
 
@@ -281,7 +263,6 @@ double baroBias = NaN;
 double varBaroBias;
 vector<double> baroCorrectedValues;
 cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
-cv::Matx33d P_z_new = cv::Matx33d::zeros();
 
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
@@ -292,8 +273,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
 
     ROS_INFO("z_bar: %6.6lf", z_bar);
-    ROS_INFO("P_z(0,0): %6.6lf, P_z(0,1): %6.6lf", P_z(0,0), P_z(0,1));
-    ROS_INFO("P_z(1,0): %6.6lf, P_z(1,1): %6.6lf", P_z(1,0), P_z(1,1));
 
     // determine the value of the barometer bias
     if (std::isnan(baroBias)) {
@@ -305,33 +284,19 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // Variables for EKF Correction (Baro)
     cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
-    Z_new = {Z(0), Z(1), baroBias};
-    P_z_new(0,0) = P_z(0,0);
-    P_z_new(1,1) = P_z(1,1);
     // P_z_new(2,2) = r_bar_z;
-    P_z_new(2,2) = 0.0101246;
     cv::Matx31d kalman_gain_z = {0, 0, 0};
     cv::Matx<double, 1, 1> r_z = {r_bar_z};
 
     // EKF Correction for z state
-    cv::Matx<double, 1, 1> M = (H_z*P_z_new*H_z.t() + r_z);
-    kalman_gain_z = P_z_new*H_z.t()* (1/M(0));
-    // kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
-    // Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
-    Z_new = Z_new + kalman_gain_z*(z_bar-Z(0));
-    P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
-
-    // EKF Correction for z state (alt)
-    cv::Matx<double, 1, 1> Mz = (H_z*P_z_alt*H_z.t() + r_z);
-    kalman_gain_z = P_z_alt*H_z.t()* (1/Mz(0));
-    Z_alt = Z_alt + kalman_gain_z*(z_bar-Z_alt(0));
-    P_z_alt = P_z_alt - kalman_gain_z*H_z*P_z_alt;
+    cv::Matx<double, 1, 1> Mz = (H_z*P_z*H_z.t() + r_z);
+    kalman_gain_z = P_z*H_z.t()* (1/Mz(0));
+    Z = Z + kalman_gain_z*(z_bar-Z(0));
+    P_z = P_z - kalman_gain_z*H_z*P_z;
     // msg_true.pose.pose.position
 
     // debug print out the values of Z_new
     ROS_INFO("Z(0): %3.3lf, Z(1): %3.3lf, Z(2): %3.3lf", Z(0), Z(1), Z(2));
-    ROS_INFO("Z_new(0): %3.3lf, Z_new(1): %3.3lf, Z_new(2): %3.3lf", Z_new(0), Z_new(1), Z_new(2));
-    ROS_INFO("Z_alt(0): %3.3lf, Z_alt(1): %3.3lf, Z_alt(2): %3.3lf", Z_alt(0), Z_alt(1), Z_alt(2));
 
     // variance of barometer bias is "0.0101246" 
     ROS_INFO("baroCorrectedValues size: %ld ", baroCorrectedValues.size());
@@ -364,10 +329,8 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     z_snr = msg->range;
 
     // Variables for EKF Correction (Sonar)
-    cv::Matx21d kalman_gain_z = {0, 0};
-    cv::Matx31d kalman_gain_z_alt = {0, 0, 0};
-    cv::Matx<double, 1, 2> H_z = {1.0, 0.0};
-    cv::Matx<double, 1, 3> H_z_alt = {1.0, 0.0, 0.0};
+    cv::Matx31d kalman_gain_z = {0, 0, 0};
+    cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
     cv::Matx<double, 1, 1> R_z = {r_snr_z};
     cv::Matx<double, 1, 1> Y_z = {z_snr};
 
@@ -381,18 +344,11 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     //     z_snr = z_snr_prev;
     // }
 
-    // EKF Correction for z state 
-    cv::Matx<double, 1, 1> M = (H_z*P_z*H_z.t() + R_z);
-    kalman_gain_z = P_z*H_z.t()* (1/M(0));
-    // kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
+    // EKF Correction for z
+    cv::Matx<double, 1, 1> Mz = (H_z*P_z*H_z.t() + R_z);
+    kalman_gain_z = P_z*H_z.t()* (1/Mz(0));
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
-
-    //
-    cv::Matx<double, 1, 1> Mz = (H_z_alt*P_z_alt*H_z_alt.t() + R_z);
-    kalman_gain_z_alt = P_z_alt*H_z_alt.t()* (1/Mz(0));
-    Z_alt = Z_alt + kalman_gain_z_alt*(z_snr- Z_alt(0));
-    P_z_alt = P_z_alt - kalman_gain_z_alt*H_z_alt*P_z_alt;
 
     z_snr_prev = z_snr;
 
@@ -540,7 +496,7 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z_new(2)); // bias, changed to 2 because matrix(3) is vector(2)
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2)); // bias, changed to 2 because matrix(3) is vector(2)
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
 
             if (data_collection) {
