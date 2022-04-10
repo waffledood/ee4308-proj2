@@ -67,21 +67,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     //// additional variables ////
     // yaw
-    double a = A(0,0);
-
-    // covariance
-    // UX.push_back(ux);
-    // UY.push_back(uy);
-    // UZ.push_back(uz);
-    // UA.push_back(ua);
-    // if (UX.size() > 100) {
-    //     ROS_INFO("Variance: %1.5lf %1.5lf %1.5lf %1.5lf", calculate_var(UX), calculate_var(UY), calculate_var(UZ), calculate_var(UA));
-    //     UX.erase(UX.begin());
-    //     UY.erase(UY.begin());
-    //     UZ.erase(UZ.begin());
-    //     UA.erase(UA.begin());
-    // }
-
+    double a = A(0);
     
     // // bias of IMU
     // if (bias) {
@@ -95,6 +81,15 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // uy -= Yb;
     // uz -= Zb;
     // Ab -= Ab;
+
+    // // covariance
+    // UX.push_back(ux);
+    // UY.push_back(uy);
+    // UZ.push_back(uz);
+    // UA.push_back(ua);
+    // if (UX.size() > 100) {
+    //     ROS_INFO("Variance: %1.5lf %1.5lf %1.5lf %1.5lf", calculate_var(UX), calculate_var(UY), calculate_var(UZ), calculate_var(UA));
+    // }
 
     // x //
     cv::Matx22d Fx = {1, imu_dt, 0, 1};
@@ -114,7 +109,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 
     // y // 
     cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(a),  -0.5*imu_dt*imu_dt*cos(a),
-                                 -imu_dt*sin(a),              imu_dt*cos(a)};
+                                 -imu_dt*sin(a),              -imu_dt*cos(a)};
     cv::Matx22d Qy = {qx, 0, 0, qy};
     cv::Matx21d Uy = {ux, uy};
 
@@ -127,7 +122,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx22d Fa = {1, 0, 0, 0};
     cv::Matx21d Wa = {imu_dt, 1};
     //double Qa = qa;
-    cv::Matx<double, 1,1> Qa = {ua}; // TODO - project notes said to use qa, but others used ua!
+    cv::Matx<double, 1,1> Qa = {qa}; // TODO - project notes said to use qa, but others used ua!
     cv::Matx<double, 1,1> Ua = {ua};
 
     // EKF Prediction for State matrices //
@@ -233,16 +228,19 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     cv::Matx21d Kz = {0, 0};
     cv::Matx12d H = {1.0, 0};
     cv::Matx<double,1,1> r_x = {r_gps_x}, r_y = {r_gps_y}, r_z = {r_gps_z};
-    
-    Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
+
+    cv::Matx<double, 1, 1> M = (H*P_x*H.t() + r_x);
+    Kx = P_x * H.t() * (1/M(0));
     X = X + Kx*(GPS(0) - (H*X)(0));
     P_x = P_x - Kx*H*P_x;
 
-    Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
+    M = (H*P_y*H.t() + r_y);
+    Ky = P_y * H.t() * (1/M(0));
     Y = Y + Ky*(GPS(1)-(H*Y)(0));
     P_y = P_y - Ky*H*P_y;
 
-    Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
+    M = (H*P_z*H.t() + r_z);
+    Kz = P_z * H.t() * (1/M(0));
     Z = Z + Kz*(GPS(2)-(H*Z)(0));
     P_z = P_z - Kz*H*P_z;
 
@@ -274,7 +272,8 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     cv::Matx<double, 1,1> R_a = {r_mgn_a};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_a = P_a*H_a.t()*(H_a*P_a*H_a.t() + R_a).inv();
+    cv::Matx<double, 1, 1> M = H_a*P_a*H_a.t() + R_a;
+    kalman_gain_a = P_a*H_a.t()*(1/M(0));
     A = A + kalman_gain_a*(a_mgn - A(0));
     P_a = P_a - kalman_gain_a*H_a*P_a;
 
@@ -282,7 +281,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // magnetic.push_back(a_mgn);
     // if (magnetic.size() > 100) {
     //     ROS_INFO("Magnetic Variance: %1.5lf", calculate_var(magnetic));
-    //     magnetic.erase(magnetic.begin());
+    //     // magnetic.erase(magnetic.begin());
     // }
 }
 
@@ -330,13 +329,14 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     cv::Matx<double, 1, 1> r_z = {r_bar_z};
 
     // EKF Correction for z state
-    kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
+    cv::Matx<double, 1, 1> M = (H_z*P_z_new*H_z.t() + r_z);
+    kalman_gain_z = P_z_new*H_z.t()* (1/M(0));
     Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
     P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
 
     // if (baroCorrectedValues.size() > 100) {
     //     ROS_INFO("Baro Variance: %1.5lf", calculate_var(baroCorrectedValues));
-    //     baroCorrectedValues.erase(baroCorrectedValues.begin());
+        // baroCorrectedValues.erase(baroCorrectedValues.begin());
     // }
 
 }
@@ -363,15 +363,16 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     cv::Matx<double, 1, 1> Y_z = {z_snr};
 
     // EKF Correction for a (yaw) state 
-    kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
+    cv::Matx<double, 1, 1> M = (H_z*P_z*H_z.t() + R_z);
+    kalman_gain_z = P_z*H_z.t()* (1/M(0));
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
 
-    // // covariance
+    // covariance
     // sonar.push_back(z_snr);
     // if (sonar.size() > 100) {
     //     ROS_INFO("Sonar Variance: %1.5lf", calculate_var(sonar));
-    //     sonar.erase(sonar.begin());
+        // sonar.erase(sonar.begin());
     // }
 }
 
