@@ -3,7 +3,7 @@ verbose_main: false
 main_iter_rate: 40
 height: 2
 look_ahead: 1
-close_enough: 0.3
+close_enough: 0.2
 average_speed: 2.0
 
 # motion
@@ -21,10 +21,10 @@ enable_magnet: true
 r_mgn_a: 0.700 
 # range from 0.000-0.001 for now, 0.000 most common
 enable_baro: true
-r_bar_z: 0.012 
+r_bar_z: 0.01180
 # currently ranges from 0.008-0.03, previously ranged from 0.015-0.024 for now
 enable_sonar: true
-r_snr_z: 0.000 
+r_snr_z: 0.00002
 # range from 0.000-0.000 for now, 0.001 most common
 motion_iter_rate: 20
 
@@ -32,7 +32,7 @@ motion_iter_rate: 20
 enable_move: true
 verbose_move: false
 Kp_lin: 1.1
-Ki_lin: 0.0
+Ki_lin: 0.05
 Kd_lin: 0.5
 Kp_z: 1.3
 Ki_z: 0.05

@@ -40,6 +40,10 @@ double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
 double Xb = NaN, Yb = NaN, Zb = NaN, Ab = NaN;
 bool bias = true;
+vector<double> UX;
+vector<double> UY;
+vector<double> UZ;
+vector<double> UA;
 // see https://docs.opencv.org/3.4/de/de1/classcv_1_1Matx.html
 void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 {
@@ -65,6 +69,19 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //// additional variables ////
     // yaw
     double a = A(0,0);
+
+    // covariance
+    // UX.push_back(ux);
+    // UY.push_back(uy);
+    // UZ.push_back(uz);
+    // UA.push_back(ua);
+    // if (UX.size() > 100) {
+    //     ROS_INFO("Variance: %1.5lf %1.5lf %1.5lf %1.5lf", calculate_var(UX), calculate_var(UY), calculate_var(UZ), calculate_var(UA));
+    //     UX.erase(UX.begin());
+    //     UY.erase(UY.begin());
+    //     UZ.erase(UZ.begin());
+    //     UA.erase(UA.begin());
+    // }
 
     
     // // bias of IMU
@@ -122,6 +139,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 // https://docs.ros.org/en/api/sensor_msgs/html/msg/NavSatFix.html
 cv::Matx31d GPS = {NaN, NaN, NaN};
 cv::Matx31d initial_pos = {NaN, NaN, NaN}; // written below in main. no further action needed.
+cv::Matx31d cov = {NaN, NaN, NaN};
 const double DEG2RAD = M_PI / 180;
 const double RAD_POLAR = 6356752.3;
 const double RAD_EQUATOR = 6378137;
@@ -140,10 +158,6 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double lon = msg->longitude;
     double alt = msg->altitude;
     boost::array<double, 9> array_msg;
-
-    // covariance
-    // array_msg = msg->position_covariance;
-    // ROS_INFO("GPS covariance\n %7.3lf %7.3lf %7.3lf\n %7.3lf %7.3lf %7.3lf\n %7.3lf %7.3lf %7.3lf", array_msg[0], array_msg[1], array_msg[2], array_msg[3], array_msg[4], array_msg[5], array_msg[6], array_msg[7], array_msg[8]);
 
     lat *= DEG2RAD;
     lon *= DEG2RAD;
@@ -259,7 +273,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     if (std::isnan(baroBias)) {
         baroBias = z_bar - Z(0);
     }
-    // correct the value of z_bar, by removing the bias
     z_bar = z_bar - baroBias;
     // track the variance of the barometer bias 
     varBaroBias = abs(Z(0) - z_bar);
@@ -295,7 +308,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
             baroCorrectedValues.erase(baroCorrectedValues.begin());
         }
     }
-    
 
 }
 
