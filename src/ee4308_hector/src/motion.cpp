@@ -83,20 +83,6 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     //     UA.erase(UA.begin());
     // }
 
-    
-    // // bias of IMU
-    // if (bias) {
-    //     Xb = ux;
-    //     Yb = uy;
-    //    Zb = uz - 9.8;
-    //     Ab = ua;
-    //     bias = false;
-    // }
-    // ux -= Xb;
-    // uy -= Yb;
-    // uz -= Zb;
-    // Ab -= Ab;
-
     // x //
     cv::Matx22d Fx = {1, imu_dt, 0, 1};
     cv::Matx22d Wx = {-0.5 * pow(imu_dt, 2) * cos(a),  0.5 * pow(imu_dt, 2) * sin(a),
@@ -260,7 +246,6 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 double z_bar = NaN;
 double r_bar_z;
 double baroBias = NaN;
-double varBaroBias;
 vector<double> baroCorrectedValues;
 cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
 
@@ -277,8 +262,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
         baroBias = z_bar - Z(0);
     }
     z_bar = z_bar - baroBias;
-    // track the variance of the barometer bias 
-    varBaroBias = abs(Z(0) - z_bar);
     Z(2) = baroBias;
 
     // Variables for EKF Correction (Baro)
@@ -297,7 +280,7 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // variance of Barometer
     if (data_collection) {
-        baroCorrectedValues.push_back(varBaroBias);
+        baroCorrectedValues.push_back(z_bar);
         if (baroCorrectedValues.size() > 100) {
             ROS_INFO("Baro Variance: %lf", calculate_var_baro(baroCorrectedValues));
             baroCorrectedValues.erase(baroCorrectedValues.begin());
@@ -327,14 +310,6 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
     cv::Matx<double, 1, 1> R_z = {r_snr_z};
     cv::Matx<double, 1, 1> Y_z = {z_snr};
-
-    // if (z_snr > 2.0) 
-    //     takeoffDone = true;
-
-    // if (takeoffDone && abs(z_snr_prev - z_snr) > 0.2) {
-    //     // do nothing
-    //     z_snr = z_snr_prev;
-    // }
 
     // EKF Correction for z
     cv::Matx<double, 1, 1> Mz = (H_z*P_z*H_z.t() + R_z);
@@ -488,7 +463,7 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2)); // bias, changed to 2 because matrix(3) is vector(2)
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
 
             if (data_collection) {
