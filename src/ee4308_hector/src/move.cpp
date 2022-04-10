@@ -137,22 +137,6 @@ int main(int argc, char **argv)
     double dt;
     double prev_time = ros::Time::now().toSec();
 
-    /*
-    double x_pos_error, y_pos_error, z_pos_error;
-    double past_x_pos_error = 0, past_y_pos_error = 0, past_z_pos_error = 0;
-    double total_x = 0, total_y = 0, total_z = 0;
-    double x_portional, x_integal, x_derviate;
-    double y_portional, y_integal, y_derviate;
-    double z_portional, z_integal, z_derviate;
-    
-    double pos_error, total_error = 0;
-    double total_portional, total_integal, total_derviate;
-    double past_pos_error = 0;
-    double cmd_total_lin_vel;
-
-    double c_theta, s_theta;
-    */
-
     double x_error = 0;
     double x_prev_error = 0;
     double x_error_total = 0;
@@ -188,86 +172,11 @@ int main(int argc, char **argv)
 
         //// IMPLEMENT /////
 
+        // For tuning 
         //target_x = 4;
         //target_y = 4;
-        /*
-        // Frame Transformation (from absolute to drone frame)
-        c_theta = cos(-a);
-        s_theta = sin(-a);
-
-        // Find position error between target and current coordinates
-        x_pos_error = c_theta * (target_x - x) - s_theta * (target_y - y);
-        y_pos_error = s_theta * (target_x - x) + c_theta * (target_y - y);
-        z_pos_error = target_z - z;
-        pos_error = dist_euc(x, y, target_x, target_y);
-
-        // Sumation of position errors
-        total_x += x_pos_error * dt;
-        total_y += y_pos_error * dt;
-        total_z += z_pos_error * dt;
-        total_error += pos_error * dt;
-
-        // PID for total component
-        total_portional = Kp_lin * pos_error;
-        total_integal = Ki_lin * total_error;
-        total_derviate = Kd_lin * ((pos_error - past_pos_error)/dt);
-
-        // PID for x component
-        x_portional = Kp_lin * x_pos_error;
-        x_integal = Ki_lin * total_x;
-        x_derviate = Kd_lin * ((x_pos_error - past_x_pos_error)/dt);
-
-        // PID for y component
-        y_portional = Kp_lin * y_pos_error;
-        y_integal = Ki_lin * total_y;
-        y_derviate = Kd_lin * ((y_pos_error - past_y_pos_error)/dt);
-
-        // PID for z component
-        z_portional = Kp_z * z_pos_error;
-        z_integal = Ki_z * total_z;
-        z_derviate = Kd_z * ((z_pos_error - past_z_pos_error)/dt);
-
-        // Store pervious position errors
-        past_x_pos_error = x_pos_error;
-        past_y_pos_error = y_pos_error;
-        past_z_pos_error = z_pos_error;
-        past_pos_error = pos_error;
         
-        // Calculate final control signal
-        cmd_lin_vel_x = x_portional + x_integal + x_derviate;
-        cmd_lin_vel_y = y_portional + y_integal + y_derviate;
-        cmd_lin_vel_z = z_portional + z_integal + z_derviate;
-        cmd_total_lin_vel = total_derviate + total_integal + total_portional;
-
-        // State Conditional Check 
-        if (rotate) 
-        {                              
-            cmd_lin_vel_a = yaw_rate;
-            if (cmd_total_lin_vel > max_lin_vel) 
-            {
-                cmd_lin_vel_x *= max_lin_vel/cmd_total_lin_vel;
-                cmd_lin_vel_y *= max_lin_vel/cmd_total_lin_vel;
-                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);    
-            } else if (cmd_total_lin_vel < - max_lin_vel) 
-            {
-                cmd_lin_vel_x *= -max_lin_vel/cmd_total_lin_vel;
-                cmd_lin_vel_y *= -max_lin_vel/cmd_total_lin_vel;
-                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);  
-            } else 
-            {
-                cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel);      
-            }
-        } else 
-        {
-            ROS_INFO("TAKEOFF MODE");
-            cmd_lin_vel_x = 0;
-            cmd_lin_vel_y = 0;
-            cmd_lin_vel_z = sat(cmd_lin_vel_z, max_z_vel); 
-            cmd_lin_vel_a = 0;
-        } 
-
-        */
-        
+        // Frame transformation
         c_theta = cos(-a);
         s_theta = sin(-a);
 
@@ -287,7 +196,7 @@ int main(int argc, char **argv)
         temp_signal_x = x_p + x_i +x_d;
 
         acc_x = (temp_signal_x - cmd_lin_vel_x)/dt;
-        cmd_lin_vel_x += acc_x * dt;
+        cmd_lin_vel_x += (acc_x * dt);
 
         // Y axis
         double y_p = 0, y_i = 0, y_d = 0;
@@ -305,7 +214,7 @@ int main(int argc, char **argv)
         temp_signal_y = y_p + y_i + y_d;
 
         acc_y = (temp_signal_y - cmd_lin_vel_y)/dt;
-        cmd_lin_vel_y += acc_y * dt;
+        cmd_lin_vel_y += (acc_y * dt);
         
 
         // Z axis
@@ -324,14 +233,15 @@ int main(int argc, char **argv)
         temp_signal_z = z_p + z_i + z_d;
 
         acc_z = (temp_signal_z - cmd_lin_vel_z)/dt;
-        cmd_lin_vel_z += acc_z * dt;
+        cmd_lin_vel_z += (acc_z * dt);
 
-        cmd_lin_vel_z = sat(cmd_lin_vel_z + acc_z * dt, max_z_vel);
+        cmd_lin_vel_z = sat(cmd_lin_vel_z + (acc_z * dt), max_z_vel);
 
 
         // Velocity Check
-        combined_vel = sqrt((cmd_lin_vel_x * cmd_lin_vel_x) + (cmd_lin_vel_y * cmd_lin_vel_y));
-        if (combined_vel > max_lin_vel) {
+        combined_vel = sqrt(pow(cmd_lin_vel_x, 2.0) + pow(cmd_lin_vel_y, 2));
+        if (combined_vel > max_lin_vel) 
+        {
             cmd_lin_vel_x = cmd_lin_vel_x * max_lin_vel / combined_vel;
             cmd_lin_vel_y = cmd_lin_vel_y * max_lin_vel / combined_vel;
         }
@@ -344,10 +254,8 @@ int main(int argc, char **argv)
             cmd_lin_vel_a = 0;
         }
         */
-        
 
         //data_file << ros::Time::now().toSec() << "\t" << x_pos_error << "\t" << y_pos_error << std::endl;
-
 
         // verbose
         if (verbose)
