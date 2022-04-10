@@ -23,6 +23,7 @@ using namespace std;
 // global parameters to be read from ROS PARAMs
 bool verbose, use_ground_truth, enable_baro, enable_magnet, enable_sonar, enable_gps;
 bool data_collection;
+nav_msgs::Odometry msg_true;
 
 // others
 bool ready = false; // signal to topics to begin
@@ -272,6 +273,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
 
+    auto & tp = msg_true.pose.pose.position;
+    double diff = z_bar - tp.z;
+    ROS_INFO("barometer bias is %6.3lf", diff);
+
     ROS_INFO("z_bar: %6.6lf", z_bar);
 
     // determine the value of the barometer bias
@@ -293,7 +298,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     kalman_gain_z = P_z*H_z.t()* (1/Mz(0));
     Z = Z + kalman_gain_z*(z_bar-Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
-    // msg_true.pose.pose.position
 
     // debug print out the values of Z_new
     ROS_INFO("Z(0): %3.3lf, Z(1): %3.3lf, Z(2): %3.3lf", Z(0), Z(1), Z(2));
@@ -334,8 +338,6 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     cv::Matx<double, 1, 1> R_z = {r_snr_z};
     cv::Matx<double, 1, 1> Y_z = {z_snr};
 
-    // ROS_INFO("z_snr: %6.3lf", z_snr);
-
     // if (z_snr > 2.0) 
     //     takeoffDone = true;
 
@@ -363,7 +365,6 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 }
 
 // --------- GROUND TRUTH ----------
-nav_msgs::Odometry msg_true;
 void cbTrue(const nav_msgs::Odometry::ConstPtr &msg)
 {
     msg_true = *msg;
