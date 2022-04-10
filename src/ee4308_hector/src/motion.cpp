@@ -23,7 +23,6 @@ using namespace std;
 // global parameters to be read from ROS PARAMs
 bool verbose, use_ground_truth, enable_baro, enable_magnet, enable_sonar, enable_gps;
 bool data_collection;
-nav_msgs::Odometry msg_true;
 
 // others
 bool ready = false; // signal to topics to begin
@@ -273,12 +272,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
 
-    auto & tp = msg_true.pose.pose.position;
-    double diff = z_bar - tp.z;
-    ROS_INFO("barometer bias is %6.3lf", diff);
-
-    ROS_INFO("z_bar: %6.6lf", z_bar);
-
     // determine the value of the barometer bias
     if (std::isnan(baroBias)) {
         baroBias = z_bar - Z(0);
@@ -286,10 +279,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = z_bar - baroBias;
     // track the variance of the barometer bias 
     varBaroBias = abs(Z(0) - z_bar);
+    Z(2) = baroBias;
 
     // Variables for EKF Correction (Baro)
     cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
-    // P_z_new(2,2) = r_bar_z;
     cv::Matx31d kalman_gain_z = {0, 0, 0};
     cv::Matx<double, 1, 1> r_z = {r_bar_z};
 
@@ -301,9 +294,6 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // debug print out the values of Z_new
     ROS_INFO("Z(0): %3.3lf, Z(1): %3.3lf, Z(2): %3.3lf", Z(0), Z(1), Z(2));
-
-    // variance of barometer bias is "0.0101246" 
-    ROS_INFO("baroCorrectedValues size: %ld ", baroCorrectedValues.size());
 
     // variance of Barometer
     if (data_collection) {
@@ -364,6 +354,7 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     }
 }
 
+nav_msgs::Odometry msg_true;
 // --------- GROUND TRUTH ----------
 void cbTrue(const nav_msgs::Odometry::ConstPtr &msg)
 {
