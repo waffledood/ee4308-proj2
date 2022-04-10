@@ -22,6 +22,7 @@ using namespace std;
 
 // global parameters to be read from ROS PARAMs
 bool verbose, use_ground_truth, enable_baro, enable_magnet, enable_sonar, enable_gps;
+bool data_collection;
 
 // others
 bool ready = false; // signal to topics to begin
@@ -87,15 +88,6 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx21d Ux = {ux, uy};
 
     // y // 
-    // // F_y, W_y, Jacobian matrices of y_axis
-    // cv::Matx22d W_y = {-0.5 * pow(imu_dt, 2) * cos(a),  -0.5 * pow(imu_dt, 2) * sin(a),
-    //                    -imu_dt * cos(a),                -imu_dt * sin(a)};
-    // // Qy, diagonal covariance matrix of the IMU noise in the IMU frame along the y-axis
-    // cv::Matx22d Q_y = {qy, 0, 0, qx};
-    // // Uy
-    // cv::Matx21d U_y = {uy, ux};
-
-    // y // 
     cv::Matx22d Wy = {-0.5*imu_dt*imu_dt*sin(a),  -0.5*imu_dt*imu_dt*cos(a),
                                  -imu_dt*sin(a),              imu_dt*cos(a)};
     cv::Matx22d Qy = {qx, 0, 0, qy};
@@ -110,7 +102,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx22d Fa = {1, 0, 0, 0};
     cv::Matx21d Wa = {imu_dt, 1};
     //double Qa = qa;
-    cv::Matx<double, 1,1> Qa = {ua}; // TODO - project notes said to use qa, but others used ua!
+    cv::Matx<double, 1,1> Qa = {qa}; // TODO - project notes said to use qa, but others used ua!
     cv::Matx<double, 1,1> Ua = {ua};
 
     // EKF Prediction for State matrices //
@@ -179,53 +171,27 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     GPS = {NED(0) + initial_pos(0), -NED(1) + initial_pos(1), -NED(2) + initial_pos(2)};
 
-    // // Variables for EKF Correction (GPS)
-    // double x_gps, y_gps, z_gps;
-    // cv::Matx12d jacobian = {1, 0};
-    // cv::Matx21d kalman_gain_x = {0, 0};
-    // cv::Matx21d kalman_gain_y = {0, 0};
-    // cv::Matx21d kalman_gain_z = {0, 0};
-
-    // // EKF Correction for x state 
-    // x_gps = GPS(0);
-    // kalman_gain_x = { P_x(0,0) * pow( P_x(0,0) + r_gps_x, -1 ) ,
-    //                   P_x(1,0) * pow( P_x(0,0) + r_gps_x, -1 ) };
-    // X = X + kalman_gain_x * ( x_gps - X(0) );
-    // P_x = P_x - ( kalman_gain_x * jacobian * P_x );
-
-    // // EKF Correction for y state 
-    // y_gps = GPS(1);
-    // kalman_gain_y = { P_y(0,0) * pow( P_y(0,0) + r_gps_y, -1 ) ,
-    //                   P_y(1,0) * pow( P_y(0,0) + r_gps_y, -1 ) };
-    // Y = Y + kalman_gain_y * ( y_gps - Y(0) );
-    // P_y = P_y - ( kalman_gain_y * jacobian * P_y );
-
-    // // EKF Correction for z state 
-    // z_gps = GPS(2);
-    // kalman_gain_z = { P_z(0,0) * pow( P_z(0,0) + r_gps_z, -1 ) ,
-    //                   P_z(1,0) * pow( P_z(0,0) + r_gps_z, -1 ) };
-    // Z = Z + kalman_gain_z * ( y_gps - Z(0) );
-    // P_z = P_z - ( kalman_gain_z * jacobian * P_z );
-
-    // GPS Correction
+    // EKF Correction for x, y & z
+    double x_gps = GPS(0), y_gps = GPS(1), z_gps = GPS(2);
     cv::Matx21d Kx = {0, 0};
     cv::Matx21d Ky = {0, 0};
     cv::Matx21d Kz = {0, 0};
     cv::Matx12d H = {1.0, 0};
-    cv::Matx<double,1,1> r_x = {r_gps_x}, r_y = {r_gps_y}, r_z = {r_gps_z};
+    cv::Matx<double,1,1> r_x = {r_gps_x};
+    cv::Matx<double,1,1> r_y = {r_gps_y};
+    cv::Matx<double,1,1> r_z = {r_gps_z};
     
     Kx = P_x * H.t() * (H*P_x*H.t() + r_x).inv();
-    X = X + Kx*(GPS(0) - (H*X)(0));
+    X = X + Kx*(x_gps - X(0));
     P_x = P_x - Kx*H*P_x;
 
     Ky = P_y * H.t() * (H*P_y*H.t() + r_y).inv();
-    Y = Y + Ky*(GPS(1)-(H*Y)(0));
+    Y = Y + Ky*(y_gps - Y(0));
     P_y = P_y - Ky*H*P_y;
 
     Kz = P_z * H.t() * (H*P_z*H.t() + r_z).inv();
-    Z = Z + Kz*(GPS(2)-(H*Z)(0));
+    Z = Z + Kz*(z_gps - Z(0));
     P_z = P_z - Kz*H*P_z;
-
 }
 
 // --------- Magnetic ----------
@@ -258,22 +224,24 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     A = A + kalman_gain_a*(a_mgn - A(0));
     P_a = P_a - kalman_gain_a*H_a*P_a;
 
-    // // covariance
-    // magnetic.push_back(a_mgn);
-    // if (magnetic.size() > 100) {
-    //     ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
-    //     magnetic.erase(magnetic.begin());
-    // }
+    // covariance
+    if (data_collection) {
+        magnetic.push_back(a_mgn);
+        if (magnetic.size() > 100) {
+            ROS_INFO("Magnetic Variance: %7.3lf", calculate_var(magnetic));
+            magnetic.erase(magnetic.begin());
+        }
+    }
 }
 
 // --------- Baro ----------
 double z_bar = NaN;
 double r_bar_z;
-vector<double> baroRawValues;
+double baroBias = NaN;
+double varBaroBias;
 vector<double> baroCorrectedValues;
-double baroBias;
 cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
-cv::Matx33d P_z_new = cv::Matx33d::ones();
+cv::Matx33d P_z_new = cv::Matx33d::zeros();
 
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
@@ -283,40 +251,51 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
 
-    // covariance
-    // redefine Z as a 3x1 matrix
-    // Z = {Z(0), Z(1), 0};
-    // collect all z_bar measurements
-    if (baroRawValues.empty()) {
-        baroBias = z_bar - 0.178;
+    ROS_INFO("z_bar: %6.6lf", z_bar);
+    ROS_INFO("P_z(0,0): %6.6lf, P_z(0,1): %6.6lf", P_z(0,0), P_z(0,1));
+    ROS_INFO("P_z(1,0): %6.6lf, P_z(1,1): %6.6lf", P_z(1,0), P_z(1,1));
+
+    // determine the value of the barometer bias
+    if (std::isnan(baroBias)) {
+        baroBias = z_bar - Z(0);
     }
-    baroRawValues.push_back(z_bar);
-    // determine z_bar bias by calculating average of all measurements
-    // baroBias = calculate_mean(baroRawValues);
-    // assignment of bias to Z matrix
-    // Z(2) = baroBias;
-    // assignment of corrected z_bar measurement
+    // correct the value of z_bar, by removing the bias
     z_bar = z_bar - baroBias;
-    baroCorrectedValues.push_back(z_bar);
+    // track the variance of the barometer bias 
+    varBaroBias = abs(Z(0) - z_bar);
 
     // Variables for EKF Correction (Baro)
     cv::Matx<double, 1, 3> H_z = {1.0, 0.0, 0.0};
-    cv::Matx31d Z_new = {Z(0), Z(1), z_bar};
+    Z_new = {Z(0), Z(1), baroBias};
     P_z_new(0,0) = P_z(0,0);
     P_z_new(1,1) = P_z(1,1);
-    P_z_new(2,2) = r_bar_z;
+    // P_z_new(2,2) = r_bar_z;
+    P_z_new(2,2) = 0.0101246;
     cv::Matx31d kalman_gain_z = {0, 0, 0};
     cv::Matx<double, 1, 1> r_z = {r_bar_z};
 
     // EKF Correction for z state
     kalman_gain_z = P_z_new*H_z.t()*(H_z*P_z_new*H_z.t() + r_z).inv();
-    Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
+    // Z_new = Z_new + kalman_gain_z*(z_bar-Z(0)-baroBias);
+    Z_new = Z_new + kalman_gain_z*(z_bar-Z(0));
     P_z_new = P_z_new - kalman_gain_z*H_z*P_z_new;
 
-    if (baroCorrectedValues.size() > 100) {
-        ROS_INFO("Baro Variance: %lf", calculate_var(baroCorrectedValues));
-        baroCorrectedValues.erase(baroCorrectedValues.begin());
+    // debug print out the values of Z_new
+    ROS_INFO("Z(0): %3.3lf, Z(1): %3.3lf, Z(2): %3.3lf", Z(0), Z(1), Z(2));
+    ROS_INFO("Z_new(0): %3.3lf, Z_new(1): %3.3lf, Z_new(2): %3.3lf", Z_new(0), Z_new(1), Z_new(2));
+
+    // variance of barometer bias is "0.0101246" 
+    ROS_INFO("baroCorrectedValues size: %ld ", baroCorrectedValues.size());
+
+    // variance of Barometer
+    if (data_collection) {
+        baroCorrectedValues.push_back(varBaroBias);
+        if (baroCorrectedValues.size() > 100) {
+            ROS_INFO("Baro Variance: %lf", calculate_var_baro(baroCorrectedValues));
+            baroCorrectedValues.erase(baroCorrectedValues.begin());
+        }
     }
+    
 
 }
 
@@ -324,9 +303,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 /* important note: sonar has a range of 3m & is affected 
    by heights of ground obstacles 
 */
-double z_snr = NaN;
+double z_snr = NaN, z_snr_prev = NaN;
 double r_snr_z;
 vector<double> sonar;
+bool takeoffDone = false;
 void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 {
     if (!ready)
@@ -341,17 +321,31 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     cv::Matx<double, 1, 1> R_z = {r_snr_z};
     cv::Matx<double, 1, 1> Y_z = {z_snr};
 
+    // ROS_INFO("z_snr: %6.3lf", z_snr);
+
+    // if (z_snr > 2.0) 
+    //     takeoffDone = true;
+
+    // if (takeoffDone && abs(z_snr_prev - z_snr) > 0.2) {
+    //     // do nothing
+    //     z_snr = z_snr_prev;
+    // }
+
     // EKF Correction for a (yaw) state 
     kalman_gain_z = P_z*H_z.t()*(H_z*P_z*H_z.t() + R_z).inv();
     Z = Z + kalman_gain_z*(z_snr- Z(0));
     P_z = P_z - kalman_gain_z*H_z*P_z;
 
-    // covariance
-    // sonar.push_back(z_snr);
-    // if (sonar.size() > 100) {
-    //     ROS_INFO("Sonar Variance: %7.3lf", calculate_var(sonar));
-    //     sonar.erase(sonar.begin());
-    // }
+    z_snr_prev = z_snr;
+
+    // variance of Sonar
+    if (data_collection) {
+        sonar.push_back(z_snr);
+        if (sonar.size() > 100) {
+            ROS_INFO("Sonar Variance: %7.3lf", calculate_var(sonar));
+            sonar.erase(sonar.begin());
+        }
+    }
 }
 
 // --------- GROUND TRUTH ----------
@@ -418,6 +412,8 @@ int main(int argc, char **argv)
         ROS_WARN("HMOTION: Param enable_sonar not found, set to true");
     if (!nh.param("enable_gps", enable_gps, true))
         ROS_WARN("HMOTION: Param enable_gps not found, set to true");
+    if (!nh.param("data_collection", data_collection, true))
+        ROS_WARN("HMOTION: Param data_collection not found, set to true");
 
     // --------- Subscribers ----------
     ros::Subscriber sub_true = nh.subscribe<nav_msgs::Odometry>("ground_truth/state", 1, &cbTrue);
@@ -486,10 +482,15 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", baroBias); // bias, changed to 2 because matrix(3) is vector(2)
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z_new(2)); // bias, changed to 2 because matrix(3) is vector(2)
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
 
-            data_file << "z_bar var: " << calculate_var(baroCorrectedValues) << std::endl;
+            if (data_collection) {
+                data_file << "baro bias var: " << calculate_var_baro(baroCorrectedValues) << ", "
+                          << "z_snr var: " << calculate_var(sonar) << ", "
+                          << "a_mgn var: " << calculate_var(magnetic)
+                          << std::endl;
+            }
         }
 
         //  Publish pose and vel
