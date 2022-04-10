@@ -27,5 +27,6 @@ double limit_angle(double angle);
 double sat(double calc, double max);
 double calculate_mean(std::vector<double>& vec);
 double calculate_var(std::vector<double>& vec);
+double calculate_var_baro(std::vector<double>& vec);
 
 #endif

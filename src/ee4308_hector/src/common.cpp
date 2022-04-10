@@ -118,3 +118,15 @@ double calculate_var(std::vector<double>& vec)
 
     return var / (size - 1);
 }
+
+double calculate_var_baro(std::vector<double>& vec)
+{
+    float var = 0;
+    int size = vec.size();
+
+    for (int i = 0; i < size; i++) {
+        var += (vec.at(i)) * (vec.at(i));
+    }
+
+    return var / (size - 1);
+}
